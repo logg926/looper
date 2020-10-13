@@ -117,8 +117,10 @@ async function startStream() {
   metronome = new Metronome(audioContext, channelMergerNode, 60, clickBuffer, 1);
 
   userInputNode.connect(delayNode);
-  delayNode.connect(channelMergerNode, 0, 0);
-  channelMergerNode.connect(serverOutputNode);
+  //delayNode.connect(channelMergerNode, 0, 0);
+  //channelMergerNode.connect(serverOutputNode);
+
+  delayNode.connect(serverOutputNode, 0, 0);
 
   metronome.start(-1);
 
@@ -128,6 +130,10 @@ async function startStream() {
   console.log('session init', session)
   // const audioTrack = audioTracks[0];
   const audioTrack = serverOutputNode.stream.getAudioTracks()[0];
+
+
+  // serverOutputNode.connect(audioContext.destination)
+
   const pubOptions = { videoSource: null, audioSource: audioTrack };
   const publisher = OT.initPublisher(
     'publisher',
@@ -141,7 +147,6 @@ async function startStream() {
     } else {
       session.publish(publisher, handleError);
     }
-
   });
 
   const videoElementCreated = (element) => {

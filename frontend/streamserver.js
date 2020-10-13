@@ -100,7 +100,7 @@ async function startServer() {
   gainNode.connect(delayNode);
   delayNode.connect(gainNode);
   gainNode.connect(channelMergerNode, 0, 0);
-  channelMergerNode.connect(clientOutputNode);
+  //channelMergerNode.connect(clientOutputNode);
 
   /*
   CLIENT           |                                  A
@@ -122,10 +122,17 @@ async function startServer() {
                                                     *created on demand
   */
 
-  const clickBuffer = await loadAudioBuffer("snd/sd2.wav");
-  metronome = new Metronome(audioContext, channelMergerNode, tempo,
-    clickBuffer, 0, metronomeGain);
-  metronome.start();
+  // const clickBuffer = await loadAudioBuffer("snd/sd2.wav");
+  // metronome = new Metronome(audioContext, channelMergerNode, tempo,
+  //   clickBuffer, 0, metronomeGain);
+  // metronome = new Metronome(audioContext, clientOutputNode, tempo,
+  //   clickBuffer, 0, metronomeGain);
+  // metronome.start();
+
+  const songBuffer = await loadAudioBuffer("snd/song.wav");
+  const node = new AudioBufferSourceNode(audioContext, { buffer: songBuffer });
+  node.connect(audioContext.destination);
+  node.start()
 
   console.log("Waiting for offers.")
 
@@ -252,7 +259,10 @@ function gotRemoteStream(streams) {
   const channelSplitterNode = new ChannelSplitterNode(audioContext, { numberOfOutputs: 2 });
   const clientGainNode = new GainNode(audioContext, { gain: 0 });
 
-  clientInputNode.connect(channelSplitterNode);
+
+  //clientInputNode.connect(channelSplitterNode);
+  clientInputNode.connect(audioContext.destination)
+
   channelSplitterNode.connect(channelMergerNode, 1, 1);
   channelSplitterNode.connect(clientGainNode, 0);
   clientGainNode.connect(gainNode);
