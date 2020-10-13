@@ -16,6 +16,12 @@ var sampleRate;
 var loopLength;
 var recorder;
 
+function handleError(error) {
+  if (error) {
+    alert(error.message);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", initDocument);
 
 // We start by associating the event handlers to the frontend.
@@ -25,14 +31,12 @@ async function initDocument() {
   document.getElementById("stopButton").onclick = stopStream;
 
   // Creating connection to signaling server
-  signalingChannel = new WebSocket(signalingServerUrl);
-  signalingChannel.onmessage = receiveMessage;
-  signalingChannel.onopen = () =>
-    document.getElementById("startButton").disabled = false;
+  // signalingChannel = new WebSocket(signalingServerUrl);
+  // signalingChannel.onmessage = receiveMessage;
+  // signalingChannel.onopen = () =>
+  //   document.getElementById("startButton").disabled = false;
 
 
-  const { session, token } = await initOTSession()
-  console.log('session init', session)
   //session.on("signal", function (event) {
   //  console.log("Signal sent from connection " + event.from.id);
   // Process the event.data property, if there is any data.
@@ -74,7 +78,7 @@ async function startStream() {
   document.getElementById("startButton").disabled = true;
 
   // Get user input
-  sessionId = document.getElementById("sessionId").value;
+  // sessionId = document.getElementById("sessionId").value;
   sampleRate = document.getElementById("sampleRate").value * 1;
   tempo = document.getElementById("tempo").value * 1;
   userLatency = document.getElementById("latency").value / 1000;
@@ -118,53 +122,105 @@ async function startStream() {
 
   metronome.start(-1);
 
-  // Creating RTC connection
-  connection = new RTCPeerConnection({ iceServers: [{ urls: stunServerUrl }] });
+  // TODO:Creating RTC connection
 
-  connection.onicecandidate = sendIceCandidate;
-  connection.ontrack = gotRemoteStream;
-  connection.onconnectionstatechange = reportConnectionState;
+  const { session, token } = await initOTSession()
+  console.log('session init', session)
+  // const audioTrack = audioTracks[0];
+  const audioTrack = serverOutputNode.stream.getAudioTracks()[0];
+  const pubOptions = { videoSource: null, audioSource: audioTrack };
+  const publisher = OT.initPublisher(
+    'publisher',
+    pubOptions,
+    handleError
+  );
+  session.connect(token, (error) => {
+    // If the connection is successful, publish to the session
+    if (error) {
+      handleError(error);
+    } else {
+      session.publish(publisher, handleError);
+    }
 
-  connection.addTrack(serverOutputNode.stream.getAudioTracks()[0],
-    serverOutputNode.stream);
+  });
+
+  const videoElementCreated = (element) => {
+    try {
+      document.getElementById("subscriber").appendChild(element);
+      var videoStream = element.captureStream();
+      gotRemoteStream(videoStream);
+    } catch (e) {
+      err(e);
+    }
+  };
+
+  session.on('streamCreated', (event) => {
+    const subscriber = session.subscribe(
+      event.stream,
+      {
+        insertDefaultUI: false,
+        width: '100%',
+        height: '100%',
+      },
+      handleError
+    );
+    subscriber.on('videoElementCreated', (event) => {
+      console.log('videoElementCreated');
+      videoElementCreated(event.element);
+      console.log('videoElementCreated finished');
+    });
+  });
+
+
+
+  // connection = new RTCPeerConnection({ iceServers: [{ urls: stunServerUrl }] });
+
+  // connection.onicecandidate = sendIceCandidate;
+  // connection.ontrack = gotRemoteStream;
+  // connection.onconnectionstatechange = reportConnectionState;
+
+  // connection.addTrack(serverOutputNode.stream.getAudioTracks()[0],
+  //   serverOutputNode.stream);
+
+
 
   // Creating offer
-  description = await connection.createOffer({ voiceActivityDetection: false });
+  // description = await connection.createOffer({ voiceActivityDetection: false });
 
-  // Workaround for Chrome, see https://bugs.chromium.org/p/webrtc/issues/detail?id=8133#c25
-  description.sdp = description.sdp.replace("minptime=10",
-    "minptime=10;stereo=1;sprop-stereo=1");
+  // // Workaround for Chrome, see https://bugs.chromium.org/p/webrtc/issues/detail?id=8133#c25
+  // description.sdp = description.sdp.replace("minptime=10",
+  //   "minptime=10;stereo=1;sprop-stereo=1");
 
-  console.log("Offer SDP:\n%s", description.sdp)
-  await connection.setLocalDescription(description);
-  signal({ offer: description, to: sessionId });
+  // console.log("Offer SDP:\n%s", description.sdp)
+  // await connection.setLocalDescription(description);
+  // signal({ offer: description, to: sessionId });
 }
 
-function receiveMessage(event) {
-  const data = JSON.parse(event.data);
+// function receiveMessage(event) {
+//   const data = JSON.parse(event.data);
 
-  if (data.id) { console.log("Received own ID: %d.", data.id); ownId = data.id; }
-  if (data.answer) { console.log("Answer SDP:\n%s", data.answer.sdp); connection.setRemoteDescription(data.answer); }
-  if (data.iceCandidate) { console.log("Received ICE candidate: %s", data.iceCandidate.candidate); connection.addIceCandidate(data.iceCandidate); }
-}
+//   if (data.id) { console.log("Received own ID: %d.", data.id); ownId = data.id; }
+//   if (data.answer) { console.log("Answer SDP:\n%s", data.answer.sdp); connection.setRemoteDescription(data.answer); }
+//   if (data.iceCandidate) { console.log("Received ICE candidate: %s", data.iceCandidate.candidate); connection.addIceCandidate(data.iceCandidate); }
+// }
 
-function reportConnectionState() {
-  console.log("Connection state: %s.", connection.connectionState)
-}
+// function reportConnectionState() {
+//   console.log("Connection state: %s.", connection.connectionState)
+// }
 
-function sendIceCandidate(event) {
-  if (event.candidate) {
-    console.log("Sending ICE candidate to signaling server: %s",
-      event.candidate.candidate);
-    signal({ iceCandidate: event.candidate, to: sessionId });
-  }
-}
+// function sendIceCandidate(event) {
+//   if (event.candidate) {
+//     console.log("Sending ICE candidate to signaling server: %s",
+//       event.candidate.candidate);
+//     signal({ iceCandidate: event.candidate, to: sessionId });
+//   }
+// }
 
-function gotRemoteStream(event) {
+function gotRemoteStream(stream) {
   var mediaStream, serverInputNode, channelSplitterNode;
 
   console.log("Got remote media stream.")
-  mediaStream = event.streams[0];
+  mediaStream = stream
 
   // Workaround for Chrome from https://stackoverflow.com/a/54781147
   new Audio().srcObject = mediaStream;
@@ -202,10 +258,10 @@ function updateDelayNode(networkLatency) {
   delayNode.delayTime.value = loopLength - totalLatency;
 }
 
-function signal(message) {
-  message.from = ownId;
-  signalingChannel.send(JSON.stringify(message));
-}
+// function signal(message) {
+//   message.from = ownId;
+//   signalingChannel.send(JSON.stringify(message));
+// }
 
 async function loadAudioBuffer(url) {
   var response, audioData, buffer;
