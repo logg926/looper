@@ -117,10 +117,10 @@ async function startStream() {
   metronome = new Metronome(audioContext, channelMergerNode, 60, clickBuffer, 1);
 
   userInputNode.connect(delayNode);
-  //delayNode.connect(channelMergerNode, 0, 0);
-  //channelMergerNode.connect(serverOutputNode);
+  delayNode.connect(channelMergerNode, 0, 0);
+  channelMergerNode.connect(serverOutputNode);
 
-  delayNode.connect(serverOutputNode, 0, 0);
+  // delayNode.connect(serverOutputNode, 0, 0);
 
   metronome.start(-1);
 
@@ -152,6 +152,8 @@ async function startStream() {
   const videoElementCreated = (element) => {
     try {
       document.getElementById("subscriber").appendChild(element);
+      console.log(element)
+      element.muted = true
       var videoStream = element.captureStream();
       gotRemoteStream(videoStream);
     } catch (e) {

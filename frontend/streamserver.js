@@ -123,6 +123,26 @@ async function startServer() {
                                                     *created on demand
   */
 
+  /*
+CLIENT           |                                  A
+-----------------+----------------------------------+-------------------------
+SERVER           V                                  |
+          clientInputNode(s)*                clientOutputNode(s)
+                 |                                  A
+                 V                                  |
+        channelSplitterNode(s)* -----1-----> channelMergerNode(s)
+                 | 0                                |
+                 V                                  |
+           Destination(s)*                          0
+                                                    |
+                                                    |
+                                                    |
+                                                    |
+                                                SongPlayer
+ 
+                                                  *created on demand
+*/
+
   // const clickBuffer = await loadAudioBuffer("snd/sd2.wav");
   // metronome = new Metronome(audioContext, channelMergerNode, tempo,
   //   clickBuffer, 0, metronomeGain);
@@ -134,8 +154,8 @@ async function startServer() {
 
   function onclickstart(event) {
     const node = new AudioBufferSourceNode(audioContext, { buffer: songBuffer });
-    node.connect(clientOutputNode);
-    node.start(0)
+    node.connect(channelMergerNode, 0, 0);
+    node.start()
   }
 
   document.getElementById("play").onclick = onclickstart;
@@ -170,6 +190,8 @@ async function startServer() {
   const videoElementCreated = (element) => {
     try {
       document.getElementById("subscriber").appendChild(element);
+      console.log(element)
+      element.muted = true
       var videoStream = element.captureStream();
       gotRemoteStream(videoStream);
     } catch (e) {
@@ -269,11 +291,12 @@ function gotRemoteStream(streams) {
   const clientGainNode = new GainNode(audioContext, { gain: 0 });
 
 
-  //clientInputNode.connect(channelSplitterNode);
-  clientInputNode.connect(audioContext.destination)
+  clientInputNode.connect(channelSplitterNode);
+  // clientInputNode.connect(audioContext.destination)
 
   channelSplitterNode.connect(channelMergerNode, 1, 1);
-  channelSplitterNode.connect(clientGainNode, 0);
+  // channelSplitterNode.connect(clientGainNode, 0);
+  channelSplitterNode.connect(audioContext.destination, 0);
   clientGainNode.connect(gainNode);
 
   clientGainNode.gain.setValueAtTime(0, audioContext.currentTime + 0.5);
