@@ -134,7 +134,7 @@ async function startStream() {
 
   // serverOutputNode.connect(audioContext.destination)
 
-  const pubOptions = { videoSource: null, audioSource: audioTrack };
+  const pubOptions = { videoSource: null, audioSource: audioTrack, name: 'clientStream' };
   const publisher = OT.initPublisher(
     'publisher',
     pubOptions,
@@ -160,20 +160,25 @@ async function startStream() {
   };
 
   session.on('streamCreated', (event) => {
-    const subscriber = session.subscribe(
-      event.stream,
-      {
-        insertDefaultUI: false,
-        width: '100%',
-        height: '100%',
-      },
-      handleError
-    );
-    subscriber.on('videoElementCreated', (event) => {
-      console.log('videoElementCreated');
-      videoElementCreated(event.element);
-      console.log('videoElementCreated finished');
-    });
+    console.log('geteventStream', event)
+    // console.log('getPublisherForStream', event.target.getPublisherForStream())
+    if (event.stream.name == 'serverStream') {
+
+      const subscriber = session.subscribe(
+        event.stream,
+        {
+          insertDefaultUI: false,
+          width: '100%',
+          height: '100%',
+        },
+        handleError
+      );
+      subscriber.on('videoElementCreated', (event) => {
+        console.log('videoElementCreated');
+        videoElementCreated(event.element);
+        console.log('videoElementCreated finished');
+      });
+    }
   });
 
 

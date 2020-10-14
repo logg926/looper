@@ -77,6 +77,7 @@ async function startServer() {
   tempo = document.getElementById("tempo").value;
   loopBeats = document.getElementById("loopBeats").value;
 
+
   // Adjust loop length and tempo according to the Web Audio API specification:
   // "If DelayNode is part of a cycle, then the value of the delayTime
   // attribute is clamped to a minimum of one render quantum."  We do this
@@ -130,10 +131,15 @@ async function startServer() {
   // metronome.start();
 
   const songBuffer = await loadAudioBuffer("snd/song.wav");
-  const node = new AudioBufferSourceNode(audioContext, { buffer: songBuffer });
-  node.connect(audioContext.destination);
-  node.start()
 
+  function onclickstart(event) {
+    const node = new AudioBufferSourceNode(audioContext, { buffer: songBuffer });
+    node.connect(clientOutputNode);
+    node.start(0)
+  }
+
+  document.getElementById("play").onclick = onclickstart;
+  onclickstart()
   console.log("Waiting for offers.")
 
 
@@ -142,11 +148,14 @@ async function startServer() {
   console.log('session init', session)
   // const audioTrack = audioTracks[0];
   const audioTrack = clientOutputNode.stream.getAudioTracks()[0];
-  const pubOptions = { videoSource: null, audioSource: audioTrack };
+  const pubOptions = {
+    videoSource: null, audioSource: audioTrack,
+    name: 'serverStream'
+  };
   const publisher = OT.initPublisher(
     'publisher',
     pubOptions,
-    handleError
+    handleError,
   );
   session.connect(token, (error) => {
     // If the connection is successful, publish to the session
