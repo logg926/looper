@@ -12,41 +12,46 @@ var audioContext, clientOutputNode, gainNode, delayNode, channelMergerNode,
 
 document.addEventListener("DOMContentLoaded", initDocument);
 
+function handleError(error) {
+  if (error) {
+    alert(error.message);
+  }
+}
+
 async function initDocument() {
 
   // Adding event handlers to DOM.
   document.getElementById("startServerButton").onclick = startServer;
 
   // Creating connection to signaling server.
-  signalingChannel = new WebSocket(signalingServerUrl)
-  signalingChannel.onmessage = receiveMessage;
-  signalingChannel.onopen = () =>
-    document.getElementById("startServerButton").disabled = false;
+  // signalingChannel = new WebSocket(signalingServerUrl)
+  // signalingChannel.onmessage = receiveMessage;
+  // signalingChannel.onopen = () =>
+  //   document.getElementById("startServerButton").disabled = false;
 
 
-  const { session, token } = await initOTSession()
-  console.log('session init', session)
-  session.connect(token, (error) => {
-    // If the connection is successful, publish to the session
-    if (error) {
-      handleError(error);
-    } else {
-      session.signal(
-        {
-          data: "hello"
-        },
-        function (error) {
-          if (error) {
-            console.log("signal error ("
-              + error.name
-              + "): " + error.message);
-          } else {
-            console.log("signal sent.");
-          }
-        }
-      );
-    }
-  });
+
+  // session.connect(token, (error) => {
+  //   // If the connection is successful, publish to the session
+  //   if (error) {
+  //     handleError(error);
+  //   } else {
+  //     session.signal(
+  //       {
+  //         data: "hello"
+  //       },
+  //       function (error) {
+  //         if (error) {
+  //           console.log("signal error ("
+  //             + error.name
+  //             + "): " + error.message);
+  //         } else {
+  //           console.log("signal sent.");
+  //         }
+  //       }
+  //     );
+  //   }
+  // });
 
 
 
@@ -95,7 +100,7 @@ async function startServer() {
   gainNode.connect(delayNode);
   delayNode.connect(gainNode);
   gainNode.connect(channelMergerNode, 0, 0);
-  channelMergerNode.connect(clientOutputNode);
+  //channelMergerNode.connect(clientOutputNode);
 
   /*
   CLIENT           |                                  A
@@ -117,77 +122,134 @@ async function startServer() {
                                                     *created on demand
   */
 
-  const clickBuffer = await loadAudioBuffer("snd/Closed_Hat.wav");
-  metronome = new Metronome(audioContext, channelMergerNode, tempo,
-    clickBuffer, 0, metronomeGain);
-  metronome.start();
+  // const clickBuffer = await loadAudioBuffer("snd/sd2.wav");
+  // metronome = new Metronome(audioContext, channelMergerNode, tempo,
+  //   clickBuffer, 0, metronomeGain);
+  // metronome = new Metronome(audioContext, clientOutputNode, tempo,
+  //   clickBuffer, 0, metronomeGain);
+  // metronome.start();
+
+  const songBuffer = await loadAudioBuffer("snd/song.wav");
+  const node = new AudioBufferSourceNode(audioContext, { buffer: songBuffer });
+  node.connect(audioContext.destination);
+  node.start()
 
   console.log("Waiting for offers.")
-}
 
-function receiveMessage(message) {
-  var data;
 
-  data = JSON.parse(message.data);
+  // OT 
+  const { session, token } = await initOTSession()
+  console.log('session init', session)
+  // const audioTrack = audioTracks[0];
+  const audioTrack = clientOutputNode.stream.getAudioTracks()[0];
+  const pubOptions = { videoSource: null, audioSource: audioTrack };
+  const publisher = OT.initPublisher(
+    'publisher',
+    pubOptions,
+    handleError
+  );
+  session.connect(token, (error) => {
+    // If the connection is successful, publish to the session
+    if (error) {
+      handleError(error);
+    } else {
+      session.publish(publisher, handleError);
+    }
 
-  if (data.id) receiveIdMessage(data);
-  if (data.offer) receiveOfferMessage(data);
-  if (data.iceCandidate) receiveIceCandidateMessage(data);
-}
+  });
 
-function receiveIdMessage(data) {
-  ownId = data.id;
-  console.log("Received own ID: %d.", ownId);
-  document.getElementById("sessionId").innerHTML = ownId;
-}
-
-async function receiveOfferMessage(data) {
-  var description, clientId;
-
-  clientId = data.from;
-
-  console.log("Received offer %o from %s.", data.offer, clientId)
-
-  connection[clientId] = new RTCPeerConnection({ iceServers: [{ urls: stunServerUrl }] });
-
-  connection[clientId].onicecandidate = function (event) {
-    if (event.candidate) {
-      console.log("Sending ICE candidate %o to %s", event.candidate, clientId);
-      signal({ iceCandidate: event.candidate, to: clientId });
+  const videoElementCreated = (element) => {
+    try {
+      document.getElementById("subscriber").appendChild(element);
+      var videoStream = element.captureStream();
+      gotRemoteStream(videoStream);
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  connection[clientId].ontrack = gotRemoteStream;
+  session.on('streamCreated', (event) => {
+    const subscriber = session.subscribe(
+      event.stream,
+      {
+        insertDefaultUI: false,
+        width: '100%',
+        height: '100%',
+      },
+      handleError
+    );
+    subscriber.on('videoElementCreated', (event) => {
+      console.log('videoElementCreated');
+      videoElementCreated(event.element);
+      console.log('videoElementCreated finished');
+    });
+  });
 
-  connection[clientId].onconnectionstatechange = function () {
-    console.log("State of connection with %s: %s.",
-      clientId,
-      connection[clientId].connectionState);
-  }
-
-  // Sending output to client
-  connection[clientId].addTrack(clientOutputNode.stream.getAudioTracks()[0],
-    clientOutputNode.stream);
-  await connection[clientId].setRemoteDescription(data.offer);
-  description = await connection[clientId].createAnswer();
-  description.sdp = description.sdp.replace("minptime=10",
-    "minptime=10;stereo=1;sprop-stereo=1"); // For Chrome, see
-  // https://bugs.chromium.org/p/webrtc/issues/detail?id=8133#c25
-  console.log("Answer SDP:\n%s", description.sdp)
-  await connection[clientId].setLocalDescription(description);
-  signal({ answer: description, to: clientId });
 }
 
-function receiveIceCandidateMessage(data) {
-  const clientId = data.from;
-  console.log("Received ICE candidate %o from %s.", data.iceCandidate, clientId);
-  connection[clientId].addIceCandidate(data.iceCandidate);
-}
+// function receiveMessage(message) {
+//   var data;
 
-function gotRemoteStream(event) {
+//   data = JSON.parse(message.data);
+
+//   if (data.id) receiveIdMessage(data);
+//   if (data.offer) receiveOfferMessage(data);
+//   if (data.iceCandidate) receiveIceCandidateMessage(data);
+// }
+
+// function receiveIdMessage(data) {
+//   ownId = data.id;
+//   console.log("Received own ID: %d.", ownId);
+//   document.getElementById("sessionId").innerHTML = ownId;
+// }
+
+// async function receiveOfferMessage(data) {
+//   var description, clientId;
+
+//   clientId = data.from;
+
+//   console.log("Received offer %o from %s.", data.offer, clientId)
+
+//   // connection[clientId] = new RTCPeerConnection({ iceServers: [{ urls: stunServerUrl }] });
+
+//   // connection[clientId].onicecandidate = function (event) {
+//   //   if (event.candidate) {
+//   //     console.log("Sending ICE candidate %o to %s", event.candidate, clientId);
+//   //     signal({ iceCandidate: event.candidate, to: clientId });
+//   //   }
+//   // };
+
+//   connection[clientId].ontrack = gotRemoteStream;
+
+//   // connection[clientId].onconnectionstatechange = function () {
+//   //   console.log("State of connection with %s: %s.",
+//   //     clientId,
+//   //     connection[clientId].connectionState);
+//   // }
+
+//   // Sending output to client
+//   connection[clientId].addTrack(clientOutputNode.stream.getAudioTracks()[0],
+//     clientOutputNode.stream);
+//   // await connection[clientId].setRemoteDescription(data.offer);
+//   // description = await connection[clientId].createAnswer();
+//   // description.sdp = description.sdp.replace("minptime=10",
+//   //   "minptime=10;stereo=1;sprop-stereo=1"); // For Chrome, see
+//   // // https://bugs.chromium.org/p/webrtc/issues/detail?id=8133#c25
+//   // console.log("Answer SDP:\n%s", description.sdp)
+//   // await connection[clientId].setLocalDescription(description);
+//   // signal({ answer: description, to: clientId });
+// }
+
+// function receiveIceCandidateMessage(data) {
+//   const clientId = data.from;
+//   console.log("Received ICE candidate %o from %s.", data.iceCandidate, clientId);
+//   connection[clientId].addIceCandidate(data.iceCandidate);
+// }
+
+function gotRemoteStream(streams) {
   console.log("Got remote media stream.")
 
-  const mediaStream = event.streams[0];
+  const mediaStream = streams
   //const mediaStreamTrack = event.track;
 
   // Workaround for Chrome from https://stackoverflow.com/a/54781147
@@ -197,7 +259,10 @@ function gotRemoteStream(event) {
   const channelSplitterNode = new ChannelSplitterNode(audioContext, { numberOfOutputs: 2 });
   const clientGainNode = new GainNode(audioContext, { gain: 0 });
 
-  clientInputNode.connect(channelSplitterNode);
+
+  //clientInputNode.connect(channelSplitterNode);
+  clientInputNode.connect(audioContext.destination)
+
   channelSplitterNode.connect(channelMergerNode, 1, 1);
   channelSplitterNode.connect(clientGainNode, 0);
   clientGainNode.connect(gainNode);
@@ -209,10 +274,10 @@ function gotRemoteStream(event) {
   // for another 0.5 seconds. Does not really work. :-(
 }
 
-function signal(message) {
-  message.from = ownId;
-  signalingChannel.send(JSON.stringify(message));
-}
+// function signal(message) {
+//   message.from = ownId;
+//   signalingChannel.send(JSON.stringify(message));
+// }
 
 async function loadAudioBuffer(url) {
   console.log("Loading audio data from %s.", url);
