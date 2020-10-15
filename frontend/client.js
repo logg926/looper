@@ -129,25 +129,25 @@ async function startStream() {
 
   // TODO:Creating RTC connection
 
-  const { session, token } = await initOTSession();
-  console.log("session init", session);
-  // const audioTrack = audioTracks[0];
-  const audioTrack = serverOutputNode.stream.getAudioTracks()[0];
-
   // serverOutputNode.connect(audioContext.destination)
 
-  sendAndRecieveFromServer(
+  await sendAndRecieveFromServer(
     serverOutputNode.stream.getAudioTracks()[0],
     gotRemoteStream
   );
 }
 
-function sendAndRecieveFromServer(audioTracks, remoteStreamCallBack) {
+async function sendAndRecieveFromServer(audioTracks, remoteStreamCallBack) {
+  // const audioTrack = serverOutputNode.stream.getAudioTracks()[0];
   const pubOptions = {
     videoSource: null,
     audioSource: audioTracks,
     name: "clientStream",
   };
+
+  const { session, token } = await initOTSession();
+  console.log("session init", session);
+  // const audioTrack = audioTracks[0];
   const publisher = OT.initPublisher("publisher", pubOptions, handleError);
   session.connect(token, (error) => {
     // If the connection is successful, publish to the session

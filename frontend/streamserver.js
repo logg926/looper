@@ -2,13 +2,18 @@
 
 import Metronome from "./metronome.js";
 import { signalingServerUrl, stunServerUrl } from "./constants.js";
-import "https://webrtc.github.io/adapter/adapter-latest.js"
-import { initServer, initOTSession } from './vonangeAPI.session.js'
+import "https://webrtc.github.io/adapter/adapter-latest.js";
+import { initServer, initOTSession } from "./vonangeAPI.session.js";
 
-var signalingChannel, ownId; // for Websocket 
+var signalingChannel, ownId; // for Websocket
 var connection = []; // For RTC
-var audioContext, clientOutputNode, gainNode, delayNode, channelMergerNode,
-  sampleRate, loopGain; // for Web Audio API
+var audioContext,
+  clientOutputNode,
+  gainNode,
+  delayNode,
+  channelMergerNode,
+  sampleRate,
+  loopGain; // for Web Audio API
 
 document.addEventListener("DOMContentLoaded", initDocument);
 
@@ -19,7 +24,6 @@ function handleError(error) {
 }
 
 async function initDocument() {
-
   // Adding event handlers to DOM.
   document.getElementById("startServerButton").onclick = startServer;
 
@@ -28,8 +32,6 @@ async function initDocument() {
   // signalingChannel.onmessage = receiveMessage;
   // signalingChannel.onopen = () =>
   //   document.getElementById("startServerButton").disabled = false;
-
-
 
   // session.connect(token, (error) => {
   //   // If the connection is successful, publish to the session
@@ -52,12 +54,7 @@ async function initDocument() {
   //     );
   //   }
   // });
-
-
-
 }
-
-
 
 async function startServer() {
   var metronome, loopLength, loopBeats, tempo, metronomeGain;
@@ -77,25 +74,25 @@ async function startServer() {
   tempo = document.getElementById("tempo").value;
   loopBeats = document.getElementById("loopBeats").value;
 
-
   // Adjust loop length and tempo according to the Web Audio API specification:
   // "If DelayNode is part of a cycle, then the value of the delayTime
   // attribute is clamped to a minimum of one render quantum."  We do this
   // explicitly here so we can sync the metronome.
-  loopLength = 60 / tempo * loopBeats;
-  loopLength = Math.round(loopLength * sampleRate / 128) * 128 / sampleRate;
-  tempo = 60 / loopLength * loopBeats;
+  loopLength = (60 / tempo) * loopBeats;
+  loopLength = (Math.round((loopLength * sampleRate) / 128) * 128) / sampleRate;
+  tempo = (60 / loopLength) * loopBeats;
   console.log("Loop lengh is %.5f s, tempos is %.1f bpm.", loopLength, tempo);
-
 
   console.log("Creating Web Audio.");
   audioContext = new AudioContext({ sampleRate });
   gainNode = new GainNode(audioContext, { gain: loopGain });
   delayNode = new DelayNode(audioContext, {
     delayTime: loopLength,
-    maxDelayTime: loopLength
+    maxDelayTime: loopLength,
   });
-  channelMergerNode = new ChannelMergerNode(audioContext, { numberOfInputs: 2 });
+  channelMergerNode = new ChannelMergerNode(audioContext, {
+    numberOfInputs: 2,
+  });
   clientOutputNode = new MediaStreamAudioDestinationNode(audioContext);
 
   gainNode.connect(delayNode);
@@ -153,39 +150,38 @@ SERVER           V                                  |
   const songBuffer = await loadAudioBuffer("snd/song.wav");
 
   function onclickstart(event) {
-    const node = new AudioBufferSourceNode(audioContext, { buffer: songBuffer });
+    const node = new AudioBufferSourceNode(audioContext, {
+      buffer: songBuffer,
+    });
     node.connect(channelMergerNode, 0, 0);
-    node.start()
+    node.start();
   }
 
   document.getElementById("play").onclick = onclickstart;
-  onclickstart()
-  console.log("Waiting for offers.")
+  onclickstart();
+  console.log("Waiting for offers.");
 
-
-
-  sendAndRecievefromClient(clientOutputNode.stream.getAudioTracks()[0], gotRemoteStream)
-  
-
+  await sendAndRecievefromClient(
+    clientOutputNode.stream.getAudioTracks()[0],
+    gotRemoteStream
+  );
 }
 
-
-function sendAndRecievefromClient(audioMediaStreamTrack, remoteStreamCallBack){
-
-  // OT 
-  const { session, token } = await initOTSession()
-  console.log('session init', session)
+async function sendAndRecievefromClient(
+  audioMediaStreamTrack,
+  remoteStreamCallBack
+) {
+  // OT
+  const { session, token } = await initOTSession();
+  console.log("session init", session);
   // const audioTrack = audioTracks[0];
   // const audioTrack = clientOutputNode.stream.getAudioTracks()[0];
   const pubOptions = {
-    videoSource: null, audioSource: audioMediaStreamTrack,
-    name: 'serverStream'
+    videoSource: null,
+    audioSource: audioMediaStreamTrack,
+    name: "serverStream",
   };
-  const publisher = OT.initPublisher(
-    'publisher',
-    pubOptions,
-    handleError,
-  );
+  const publisher = OT.initPublisher("publisher", pubOptions, handleError);
   session.connect(token, (error) => {
     // If the connection is successful, publish to the session
     if (error) {
@@ -193,14 +189,13 @@ function sendAndRecievefromClient(audioMediaStreamTrack, remoteStreamCallBack){
     } else {
       session.publish(publisher, handleError);
     }
-
   });
 
   const videoElementCreated = (element) => {
     try {
       document.getElementById("subscriber").appendChild(element);
-      console.log(element)
-      element.muted = true
+      console.log(element);
+      element.muted = true;
       var videoStream = element.captureStream();
       remoteStreamCallBack(videoStream);
     } catch (e) {
@@ -208,37 +203,40 @@ function sendAndRecievefromClient(audioMediaStreamTrack, remoteStreamCallBack){
     }
   };
 
-  session.on('streamCreated', (event) => {
+  session.on("streamCreated", (event) => {
     const subscriber = session.subscribe(
       event.stream,
       {
         insertDefaultUI: false,
-        width: '100%',
-        height: '100%',
+        width: "100%",
+        height: "100%",
       },
       handleError
     );
-    subscriber.on('videoElementCreated', (event) => {
-      console.log('videoElementCreated');
+    subscriber.on("videoElementCreated", (event) => {
+      console.log("videoElementCreated");
       videoElementCreated(event.element);
-      console.log('videoElementCreated finished');
+      console.log("videoElementCreated finished");
     });
   });
 }
 
 function gotRemoteStream(streams) {
-  console.log("Got remote media stream.")
+  console.log("Got remote media stream.");
 
-  const mediaStream = streams
+  const mediaStream = streams;
   //const mediaStreamTrack = event.track;
 
   // Workaround for Chrome from https://stackoverflow.com/a/54781147
   new Audio().srcObject = mediaStream;
 
-  const clientInputNode = new MediaStreamAudioSourceNode(audioContext, { mediaStream: mediaStream });
-  const channelSplitterNode = new ChannelSplitterNode(audioContext, { numberOfOutputs: 2 });
+  const clientInputNode = new MediaStreamAudioSourceNode(audioContext, {
+    mediaStream: mediaStream,
+  });
+  const channelSplitterNode = new ChannelSplitterNode(audioContext, {
+    numberOfOutputs: 2,
+  });
   const clientGainNode = new GainNode(audioContext, { gain: 0 });
-
 
   clientInputNode.connect(channelSplitterNode);
   // clientInputNode.connect(audioContext.destination)
@@ -254,7 +252,6 @@ function gotRemoteStream(streams) {
   // New clients will be silenced for 0.5 seconds, then brought to full volume
   // for another 0.5 seconds. Does not really work. :-(
 }
-
 
 async function loadAudioBuffer(url) {
   console.log("Loading audio data from %s.", url);
