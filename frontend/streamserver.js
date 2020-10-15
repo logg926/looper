@@ -163,13 +163,22 @@ SERVER           V                                  |
   console.log("Waiting for offers.")
 
 
+
+  sendAndRecievefromClient(clientOutputNode.stream.getAudioTracks()[0], gotRemoteStream)
+  
+
+}
+
+
+function sendAndRecievefromClient(audioMediaStreamTrack, remoteStreamCallBack){
+
   // OT 
   const { session, token } = await initOTSession()
   console.log('session init', session)
   // const audioTrack = audioTracks[0];
-  const audioTrack = clientOutputNode.stream.getAudioTracks()[0];
+  // const audioTrack = clientOutputNode.stream.getAudioTracks()[0];
   const pubOptions = {
-    videoSource: null, audioSource: audioTrack,
+    videoSource: null, audioSource: audioMediaStreamTrack,
     name: 'serverStream'
   };
   const publisher = OT.initPublisher(
@@ -193,7 +202,7 @@ SERVER           V                                  |
       console.log(element)
       element.muted = true
       var videoStream = element.captureStream();
-      gotRemoteStream(videoStream);
+      remoteStreamCallBack(videoStream);
     } catch (e) {
       console.error(e);
     }
@@ -215,67 +224,7 @@ SERVER           V                                  |
       console.log('videoElementCreated finished');
     });
   });
-
 }
-
-// function receiveMessage(message) {
-//   var data;
-
-//   data = JSON.parse(message.data);
-
-//   if (data.id) receiveIdMessage(data);
-//   if (data.offer) receiveOfferMessage(data);
-//   if (data.iceCandidate) receiveIceCandidateMessage(data);
-// }
-
-// function receiveIdMessage(data) {
-//   ownId = data.id;
-//   console.log("Received own ID: %d.", ownId);
-//   document.getElementById("sessionId").innerHTML = ownId;
-// }
-
-// async function receiveOfferMessage(data) {
-//   var description, clientId;
-
-//   clientId = data.from;
-
-//   console.log("Received offer %o from %s.", data.offer, clientId)
-
-//   // connection[clientId] = new RTCPeerConnection({ iceServers: [{ urls: stunServerUrl }] });
-
-//   // connection[clientId].onicecandidate = function (event) {
-//   //   if (event.candidate) {
-//   //     console.log("Sending ICE candidate %o to %s", event.candidate, clientId);
-//   //     signal({ iceCandidate: event.candidate, to: clientId });
-//   //   }
-//   // };
-
-//   connection[clientId].ontrack = gotRemoteStream;
-
-//   // connection[clientId].onconnectionstatechange = function () {
-//   //   console.log("State of connection with %s: %s.",
-//   //     clientId,
-//   //     connection[clientId].connectionState);
-//   // }
-
-//   // Sending output to client
-//   connection[clientId].addTrack(clientOutputNode.stream.getAudioTracks()[0],
-//     clientOutputNode.stream);
-//   // await connection[clientId].setRemoteDescription(data.offer);
-//   // description = await connection[clientId].createAnswer();
-//   // description.sdp = description.sdp.replace("minptime=10",
-//   //   "minptime=10;stereo=1;sprop-stereo=1"); // For Chrome, see
-//   // // https://bugs.chromium.org/p/webrtc/issues/detail?id=8133#c25
-//   // console.log("Answer SDP:\n%s", description.sdp)
-//   // await connection[clientId].setLocalDescription(description);
-//   // signal({ answer: description, to: clientId });
-// }
-
-// function receiveIceCandidateMessage(data) {
-//   const clientId = data.from;
-//   console.log("Received ICE candidate %o from %s.", data.iceCandidate, clientId);
-//   connection[clientId].addIceCandidate(data.iceCandidate);
-// }
 
 function gotRemoteStream(streams) {
   console.log("Got remote media stream.")
@@ -306,10 +255,6 @@ function gotRemoteStream(streams) {
   // for another 0.5 seconds. Does not really work. :-(
 }
 
-// function signal(message) {
-//   message.from = ownId;
-//   signalingChannel.send(JSON.stringify(message));
-// }
 
 async function loadAudioBuffer(url) {
   console.log("Loading audio data from %s.", url);

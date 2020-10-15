@@ -1,11 +1,11 @@
-'use strict';
+"use strict";
 
 import Metronome from "./metronome.js";
 import Correlator from "./correlator.js";
 import Recorder from "./recorder.js";
 import { signalingServerUrl, stunServerUrl } from "./constants.js";
-import "https://webrtc.github.io/adapter/adapter-latest.js"
-import { initServer, initOTSession } from './vonangeAPI.session.js'
+import "https://webrtc.github.io/adapter/adapter-latest.js";
+import { initServer, initOTSession } from "./vonangeAPI.session.js";
 
 var signalingChannel, ownId, sessionId; // for Websocket
 var connection; // for RTC
@@ -29,19 +29,6 @@ async function initDocument() {
   // Adding event handlers to DOM
   document.getElementById("startButton").onclick = startStream;
   document.getElementById("stopButton").onclick = stopStream;
-
-  // Creating connection to signaling server
-  // signalingChannel = new WebSocket(signalingServerUrl);
-  // signalingChannel.onmessage = receiveMessage;
-  // signalingChannel.onopen = () =>
-  //   document.getElementById("startButton").disabled = false;
-
-
-  //session.on("signal", function (event) {
-  //  console.log("Signal sent from connection " + event.from.id);
-  // Process the event.data property, if there is any data.
-  //});
-
 }
 
 /*                                               * created in gotRemoteStream
@@ -66,15 +53,21 @@ SERVER                      V                  |
 */
 
 async function startStream() {
-  var userInputStream, description, userInputNode, serverOutputNode,
-    channelMergerNode, metronome, tempo, loopBeats;
+  var userInputStream,
+    description,
+    userInputNode,
+    serverOutputNode,
+    channelMergerNode,
+    metronome,
+    tempo,
+    loopBeats;
 
   // Disable UI
   document.getElementById("sessionId").disabled = true;
   document.getElementById("sampleRate").disabled = true;
   document.getElementById("loopBeats").disabled = true;
   document.getElementById("tempo").disabled = true;
-  document.getElementById("latency").disabled = true
+  document.getElementById("latency").disabled = true;
   document.getElementById("startButton").disabled = true;
 
   // Get user input
@@ -85,9 +78,9 @@ async function startStream() {
   loopBeats = document.getElementById("loopBeats").value * 1;
 
   // Calculate loop lenght
-  loopLength = 60 / tempo * loopBeats; // Theoretical loop lengh, but
-  loopLength = Math.round(loopLength * sampleRate / 128) * 128 / sampleRate;
-  tempo = 60 / loopLength * loopBeats;
+  loopLength = (60 / tempo) * loopBeats; // Theoretical loop lengh, but
+  loopLength = (Math.round((loopLength * sampleRate) / 128) * 128) / sampleRate;
+  tempo = (60 / loopLength) * loopBeats;
   // according to the Web Audio API specification, "If DelayNode is part of a
   // cycle, then the value of the delayTime attribute is clamped to a minimum
   // of one render quantum."  We do this explicitly here so we can sync the
@@ -99,8 +92,8 @@ async function startStream() {
     audio: {
       echoCancellation: false,
       noiseSuppression: false,
-      channelCount: 1
-    }
+      channelCount: 1,
+    },
   });
 
   // TODO: Assign handler to userInputStream.oninactive
@@ -110,11 +103,21 @@ async function startStream() {
 
   clickBuffer = await loadAudioBuffer("snd/Closed_Hat.wav");
 
-  userInputNode = new MediaStreamAudioSourceNode(audioContext, { mediaStream: userInputStream });
-  delayNode = new DelayNode(audioContext, { maxDelayTime: loopLength })
-  channelMergerNode = new ChannelMergerNode(audioContext, { numberOfInputs: 2 });
+  userInputNode = new MediaStreamAudioSourceNode(audioContext, {
+    mediaStream: userInputStream,
+  });
+  delayNode = new DelayNode(audioContext, { maxDelayTime: loopLength });
+  channelMergerNode = new ChannelMergerNode(audioContext, {
+    numberOfInputs: 2,
+  });
   serverOutputNode = new MediaStreamAudioDestinationNode(audioContext);
-  metronome = new Metronome(audioContext, channelMergerNode, 60, clickBuffer, 1);
+  metronome = new Metronome(
+    audioContext,
+    channelMergerNode,
+    60,
+    clickBuffer,
+    1
+  );
 
   userInputNode.connect(delayNode);
   delayNode.connect(channelMergerNode, 0, 0);
@@ -126,20 +129,26 @@ async function startStream() {
 
   // TODO:Creating RTC connection
 
-  const { session, token } = await initOTSession()
-  console.log('session init', session)
+  const { session, token } = await initOTSession();
+  console.log("session init", session);
   // const audioTrack = audioTracks[0];
   const audioTrack = serverOutputNode.stream.getAudioTracks()[0];
 
-
   // serverOutputNode.connect(audioContext.destination)
 
-  const pubOptions = { videoSource: null, audioSource: audioTrack, name: 'clientStream' };
-  const publisher = OT.initPublisher(
-    'publisher',
-    pubOptions,
-    handleError
+  sendAndRecieveFromServer(
+    serverOutputNode.stream.getAudioTracks()[0],
+    gotRemoteStream
   );
+}
+
+function sendAndRecieveFromServer(audioTracks, remoteStreamCallBack) {
+  const pubOptions = {
+    videoSource: null,
+    audioSource: audioTracks,
+    name: "clientStream",
+  };
+  const publisher = OT.initPublisher("publisher", pubOptions, handleError);
   session.connect(token, (error) => {
     // If the connection is successful, publish to the session
     if (error) {
@@ -152,102 +161,66 @@ async function startStream() {
   const videoElementCreated = (element) => {
     try {
       document.getElementById("subscriber").appendChild(element);
-      console.log(element)
-      element.muted = true
+      console.log(element);
+      element.muted = true;
       var videoStream = element.captureStream();
-      gotRemoteStream(videoStream);
+      remoteStreamCallBack(videoStream);
     } catch (e) {
       err(e);
     }
   };
 
-  session.on('streamCreated', (event) => {
-    console.log('geteventStream', event)
+  session.on("streamCreated", (event) => {
+    console.log("geteventStream", event);
     // console.log('getPublisherForStream', event.target.getPublisherForStream())
-    if (event.stream.name == 'serverStream') {
-
+    if (event.stream.name == "serverStream") {
       const subscriber = session.subscribe(
         event.stream,
         {
           insertDefaultUI: false,
-          width: '100%',
-          height: '100%',
+          width: "100%",
+          height: "100%",
         },
         handleError
       );
-      subscriber.on('videoElementCreated', (event) => {
-        console.log('videoElementCreated');
+      subscriber.on("videoElementCreated", (event) => {
+        console.log("videoElementCreated");
         videoElementCreated(event.element);
-        console.log('videoElementCreated finished');
+        console.log("videoElementCreated finished");
       });
     }
   });
-
-
-
-  // connection = new RTCPeerConnection({ iceServers: [{ urls: stunServerUrl }] });
-
-  // connection.onicecandidate = sendIceCandidate;
-  // connection.ontrack = gotRemoteStream;
-  // connection.onconnectionstatechange = reportConnectionState;
-
-  // connection.addTrack(serverOutputNode.stream.getAudioTracks()[0],
-  //   serverOutputNode.stream);
-
-
-
-  // Creating offer
-  // description = await connection.createOffer({ voiceActivityDetection: false });
-
-  // // Workaround for Chrome, see https://bugs.chromium.org/p/webrtc/issues/detail?id=8133#c25
-  // description.sdp = description.sdp.replace("minptime=10",
-  //   "minptime=10;stereo=1;sprop-stereo=1");
-
-  // console.log("Offer SDP:\n%s", description.sdp)
-  // await connection.setLocalDescription(description);
-  // signal({ offer: description, to: sessionId });
 }
-
-// function receiveMessage(event) {
-//   const data = JSON.parse(event.data);
-
-//   if (data.id) { console.log("Received own ID: %d.", data.id); ownId = data.id; }
-//   if (data.answer) { console.log("Answer SDP:\n%s", data.answer.sdp); connection.setRemoteDescription(data.answer); }
-//   if (data.iceCandidate) { console.log("Received ICE candidate: %s", data.iceCandidate.candidate); connection.addIceCandidate(data.iceCandidate); }
-// }
-
-// function reportConnectionState() {
-//   console.log("Connection state: %s.", connection.connectionState)
-// }
-
-// function sendIceCandidate(event) {
-//   if (event.candidate) {
-//     console.log("Sending ICE candidate to signaling server: %s",
-//       event.candidate.candidate);
-//     signal({ iceCandidate: event.candidate, to: sessionId });
-//   }
-// }
 
 function gotRemoteStream(stream) {
   var mediaStream, serverInputNode, channelSplitterNode;
 
-  console.log("Got remote media stream.")
-  mediaStream = stream
+  console.log("Got remote media stream.");
+  mediaStream = stream;
 
   // Workaround for Chrome from https://stackoverflow.com/a/54781147
   new Audio().srcObject = mediaStream;
 
-  console.log("Creating server input node.")
-  serverInputNode = new MediaStreamAudioSourceNode(audioContext, { mediaStream });
+  console.log("Creating server input node.");
+  serverInputNode = new MediaStreamAudioSourceNode(audioContext, {
+    mediaStream,
+  });
 
-  console.log("Creating channel splitter node.")
-  channelSplitterNode = new ChannelSplitterNode(audioContext, { numberOfOutputs: 2 });
+  console.log("Creating channel splitter node.");
+  channelSplitterNode = new ChannelSplitterNode(audioContext, {
+    numberOfOutputs: 2,
+  });
   serverInputNode.connect(channelSplitterNode);
   channelSplitterNode.connect(audioContext.destination, 0);
 
-  console.log("Creating correlator")
-  new Correlator(audioContext, channelSplitterNode, clickBuffer,
-    updateDelayNode, 1);
+  console.log("Creating correlator");
+  new Correlator(
+    audioContext,
+    channelSplitterNode,
+    clickBuffer,
+    updateDelayNode,
+    1
+  );
 
   console.log("Creating recorder");
   const recordingNode = new MediaStreamAudioDestinationNode(audioContext);
@@ -262,10 +235,12 @@ function gotRemoteStream(stream) {
 function updateDelayNode(networkLatency) {
   const totalLatency = userLatency + networkLatency;
 
-  console.log("Latency: %.2f ms (user) + %.2f ms (network) = %.2f ms.",
+  console.log(
+    "Latency: %.2f ms (user) + %.2f ms (network) = %.2f ms.",
     1000 * userLatency,
     1000 * networkLatency,
-    1000 * totalLatency);
+    1000 * totalLatency
+  );
 
   delayNode.delayTime.value = loopLength - totalLatency;
 }
