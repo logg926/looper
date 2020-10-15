@@ -111,27 +111,34 @@ async function startStream() {
 
   userInputNode.connect(delayNode);
 
-  serverOutputNode2 = new MediaStreamAudioDestinationNode(audioContext);
-  delayNode.connect(serverOutputNode2);
+  // serverOutputNode2 = new MediaStreamAudioDestinationNode(audioContext);
+  // delayNode.connect(serverOutputNode2);
 
-  // channelMergerNode = new ChannelMergerNode(audioContext, {
-  //   numberOfInputs: 2,
-  // });
+  channelMergerNode = new ChannelMergerNode(audioContext, {
+    numberOfInputs: 2,
+  });
 
-  // delayNode.connect(channelMergerNode, 0, 0);
-  // channelMergerNode.connect(serverOutputNode);
+  delayNode.connect(channelMergerNode, 0, 0);
 
   // delayNode.connect(serverOutputNode, 0, 0);
 
   serverOutputNode = new MediaStreamAudioDestinationNode(audioContext);
 
-  metronome = new Metronome(audioContext, serverOutputNode, 60, clickBuffer, 0);
+  metronome = new Metronome(
+    audioContext,
+    channelMergerNode,
+    60,
+    clickBuffer,
+    1
+  );
+
+  channelMergerNode.connect(serverOutputNode);
 
   metronome.start(-1);
 
   let finalStream = new MediaStream();
   finalStream.addTrack(serverOutputNode.stream.getAudioTracks()[0]);
-  finalStream.addTrack(serverOutputNode2.stream.getAudioTracks()[0]);
+  // finalStream.addTrack(serverOutputNode2.stream.getAudioTracks()[0]);
   console.log(finalStream.getAudioTracks());
   await sendAndRecieveFromServerSkynet(finalStream, gotRemoteStream);
 }
@@ -177,27 +184,27 @@ function gotRemoteStream(mediaStream) {
 
   // console.log("Creating channel splitter node.");
 
-  // channelSplitterNode = new ChannelSplitterNode(audioContext, {
-  //   numberOfOutputs: 2,
-  // });
-  // serverInputNode.connect(channelSplitterNode);
-  // channelSplitterNode.connect(audioContext.destination, 0);
+  channelSplitterNode = new ChannelSplitterNode(audioContext, {
+    numberOfOutputs: 2,
+  });
+  serverInputNode.connect(channelSplitterNode);
+  channelSplitterNode.connect(audioContext.destination, 0);
 
   console.log("Creating correlator");
   new Correlator(
     audioContext,
-    serverInputNode,
+    channelSplitterNode,
     clickBuffer,
     updateDelayNode,
-    0
+    1
   );
 
   console.log("Creating recorder");
-  const recordingNode = new MediaStreamAudioDestinationNode(audioContext);
-  channelSplitterNode.connect(recordingNode, 0);
-  const downloadButton = document.getElementById("downloadButton");
-  recorder = new Recorder(recordingNode.stream, downloadButton);
-  recorder.start();
+  // const recordingNode = new MediaStreamAudioDestinationNode(audioContext);
+  // channelSplitterNode.connect(recordingNode, 0);
+  // const downloadButton = document.getElementById("downloadButton");
+  // recorder = new Recorder(recordingNode.stream, downloadButton);
+  // recorder.start();
 
   document.getElementById("stopButton").disabled = false;
 }

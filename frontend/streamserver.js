@@ -13,7 +13,8 @@ var audioContext,
   gainNode,
   delayNode,
   channelMergerNode,
-  clientOutputNodeTwo,
+  channelMergerNode2,
+  clientOutputNode2,
   sampleRate,
   outputMediaStream,
   loopGain; // for Web Audio API
@@ -65,11 +66,14 @@ async function startServer() {
   //   delayTime: loopLength,
   //   maxDelayTime: loopLength,
   // });
-  // channelMergerNode = new ChannelMergerNode(audioContext, {
-  //   numberOfInputs: 2,
-  // });
+  channelMergerNode = new ChannelMergerNode(audioContext, {
+    numberOfInputs: 2,
+  });
+  channelMergerNode2 = new ChannelMergerNode(audioContext, {
+    numberOfInputs: 2,
+  });
   clientOutputNode = new MediaStreamAudioDestinationNode(audioContext);
-  clientOutputNodeTwo = new MediaStreamAudioDestinationNode(audioContext);
+  clientOutputNode2 = new MediaStreamAudioDestinationNode(audioContext);
 
   // gainNode.connect(delayNode);
   // delayNode.connect(gainNode);
@@ -129,30 +133,39 @@ SERVER           V                                  |
     const playNode = new AudioBufferSourceNode(audioContext, {
       buffer: songBuffer,
     });
-    // playNode.connect(clientOutputNode, 0, 0);
+    playNode.connect(songSplitterNode, 0, 0);
     playNode.loop = true;
     playNode.start();
   }
+  const songSplitterNode = new ChannelSplitterNode(audioContext, {
+    numberOfOutputs: 2,
+  });
 
   document.getElementById("play").onclick = onclickstart;
   onclickstart();
   console.log("Waiting for offers.");
 
-  // await sendAndRecievefromClientVonage(
-  //   clientOutputNode.stream.getAudioTracks()[0],
-  //   gotRemoteStream
-  // );
-  console.log("clientOutputNode", clientOutputNode.stream.getAudioTracks());
+  songSplitterNode.connect(channelMergerNode, 0, 0);
+  channelMergerNode.connect(clientOutputNode);
 
-  outputMediaStream = new MediaStream();
-  outputMediaStream.addTrack(clientOutputNode.stream.getAudioTracks()[0]);
+  songSplitterNode.connect(channelMergerNode2, 1, 0);
+  channelMergerNode2.connect(clientOutputNode2);
+  // outputMediaStream = new MediaStream();
+  // outputMediaStream.addTrack(clientOutputNode.stream.getAudioTracks()[0]);
 
-  await sendAndRecievefromClientSkyway(outputMediaStream, gotRemoteStream);
+  await sendAndRecievefromClientSkyway(
+    clientOutputNode.stream,
+    clientOutputNode2.stream,
+    gotRemoteStream,
+    gotRemoteStream2
+  );
 }
 
 async function sendAndRecievefromClientSkyway(
   audioMediaStream,
-  remoteStreamCallBack
+  audioMediaStream2,
+  remoteStreamCallBack,
+  remoteStreamCallBack2
 ) {
   // OT
   //Peer作成
@@ -174,6 +187,17 @@ async function sendAndRecievefromClientSkyway(
       // video要素にカメラ映像をセットして再生
       // const videoElm = document.getElementById("their-video");
       remoteStreamCallBack(stream);
+      // videoElm.play();
+    });
+  };
+
+  document.getElementById("make-call2").onclick = () => {
+    const theirID = document.getElementById("their-id2").value;
+    const mediaConnection = peer.call(theirID, audioMediaStream2);
+    mediaConnection.on("stream", (stream) => {
+      // video要素にカメラ映像をセットして再生
+      // const videoElm = document.getElementById("their-video");
+      remoteStreamCallBack2(stream);
       // videoElm.play();
     });
   };
@@ -205,7 +229,49 @@ function gotRemoteStream(streams) {
   clientInputNode.connect(channelSplitterNode);
   // // clientInputNode.connect(audioContext.destination)
 
-  channelSplitterNode.connect(clientOutputNode, 0);
+  channelSplitterNode.connect(channelMergerNode, 0, 1);
+
+  channelSplitterNode.connect(audioContext.destination, 1);
+
+  // channelSplitterNode.connect(clientOutputNodeTwo, 1, 1);
+
+  // //here
+  // channelSplitterNode.connect(audioContext.destination, 0);
+
+  // clientGainNode.connect(gainNode);
+
+  // clientGainNode.gain.setValueAtTime(0, audioContext.currentTime + 0.5);
+  // clientGainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + 1);
+  // This is to get rid of the initial "click" when new clients connect.
+  // New clients will be silenced for 0.5 seconds, then brought to full volume
+  // for another 0.5 seconds. Does not really work. :-(
+}
+
+function gotRemoteStream2(streams) {
+  console.log("Got remote media stream.");
+
+  const mediaStream = streams;
+  //const mediaStreamTrack = event.track;
+
+  // Workaround for Chrome from https://stackoverflow.com/a/54781147
+  new Audio().srcObject = mediaStream;
+  console.log(mediaStream.getAudioTracks());
+
+  const clientInputNode = new MediaStreamAudioSourceNode(audioContext, {
+    mediaStream: mediaStream,
+  });
+  // clientInputNode.connect(clientOutputNode);
+
+  const channelSplitterNode = new ChannelSplitterNode(audioContext, {
+    numberOfOutputs: 2,
+  });
+  // const clientGainNode = new GainNode(audioContext, { gain: 0 });
+
+  clientInputNode.connect(channelSplitterNode);
+  // // clientInputNode.connect(audioContext.destination)
+
+  channelSplitterNode.connect(channelMergerNode2, 0, 1);
+
   channelSplitterNode.connect(audioContext.destination, 1);
 
   // channelSplitterNode.connect(clientOutputNodeTwo, 1, 1);
