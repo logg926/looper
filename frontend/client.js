@@ -131,13 +131,39 @@ async function startStream() {
 
   // serverOutputNode.connect(audioContext.destination)
 
-  await sendAndRecieveFromServer(
-    serverOutputNode.stream.getAudioTracks()[0],
+  // await sendAndRecieveFromServerVonage(
+  //   serverOutputNode.stream.getAudioTracks()[0],
+  //   gotRemoteStream
+  // );
+  await sendAndRecieveFromServerSkynet(
+    serverOutputNode.stream,
     gotRemoteStream
   );
 }
+async function sendAndRecieveFromServerSkynet(
+  audioStream,
+  remoteStreamCallBack
+) {
+  const peer = new Peer({
+    key: "7e326bf9-2bca-411a-896d-670ba36cea21",
+    debug: 3,
+  });
+  peer.on("open", () => {
+    console.log("sky net: open ");
+    document.getElementById("my-id").textContent = peer.id;
+  });
+  peer.on("call", (mediaConnection) => {
+    mediaConnection.answer(audioStream);
+    mediaConnection.on("stream", (stream) => {
+      remoteStreamCallBack(stream);
+    });
+  });
+}
 
-async function sendAndRecieveFromServer(audioTracks, remoteStreamCallBack) {
+async function sendAndRecieveFromServerVonage(
+  audioTracks,
+  remoteStreamCallBack
+) {
   // const audioTrack = serverOutputNode.stream.getAudioTracks()[0];
   const pubOptions = {
     videoSource: null,

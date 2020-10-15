@@ -161,13 +161,17 @@ SERVER           V                                  |
   onclickstart();
   console.log("Waiting for offers.");
 
-  await sendAndRecievefromClient(
-    clientOutputNode.stream.getAudioTracks()[0],
+  // await sendAndRecievefromClientVonage(
+  //   clientOutputNode.stream.getAudioTracks()[0],
+  //   gotRemoteStream
+  // );
+  await sendAndRecievefromClientSkyway(
+    clientOutputNode.stream,
     gotRemoteStream
   );
 }
 
-async function sendAndRecievefromClient(
+async function sendAndRecievefromClientVonage(
   audioMediaStreamTrack,
   remoteStreamCallBack
 ) {
@@ -219,6 +223,35 @@ async function sendAndRecievefromClient(
       console.log("videoElementCreated finished");
     });
   });
+}
+
+async function sendAndRecievefromClientSkyway(
+  audioMediaStream,
+  remoteStreamCallBack
+) {
+  // OT
+  //Peer作成
+  const peer = new Peer({
+    key: "7e326bf9-2bca-411a-896d-670ba36cea21",
+    debug: 3,
+  });
+
+  console.log("sky net: new peer ");
+  peer.on("open", () => {
+    console.log("sky net: open ");
+    document.getElementById("my-id").textContent = peer.id;
+  });
+
+  document.getElementById("make-call").onclick = () => {
+    const theirID = document.getElementById("their-id").value;
+    const mediaConnection = peer.call(theirID, audioMediaStream);
+    mediaConnection.on("stream", (stream) => {
+      // video要素にカメラ映像をセットして再生
+      // const videoElm = document.getElementById("their-video");
+      remoteStreamCallBack(stream);
+      // videoElm.play();
+    });
+  };
 }
 
 function gotRemoteStream(streams) {

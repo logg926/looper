@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Looper - Session Manager</title>
-  <!-- <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script> -->
+  <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <script type="module" src="streamserver.js"></script>
 </head>
@@ -88,6 +88,14 @@
     <div id="publisher"></div>
 
     <div id="subscriber" #subscriber></div>
+  </div>
+  <div>
+    skynet client call ID:
+    <textarea id="their-id"></textarea>
+  <button id="make-call">call</button>
+  <br></br>
+  My id:
+    <p id="my-id"></p>
   </div>
 </body>
 
