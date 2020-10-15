@@ -252,6 +252,9 @@ async function sendAndRecievefromClientSkyway(
       // videoElm.play();
     });
   };
+  peer.on("error", (err) => {
+    alert(err.message);
+  });
 }
 
 function gotRemoteStream(streams) {

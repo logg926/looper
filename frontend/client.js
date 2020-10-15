@@ -158,6 +158,9 @@ async function sendAndRecieveFromServerSkynet(
       remoteStreamCallBack(stream);
     });
   });
+  peer.on("error", (err) => {
+    alert(err.message);
+  });
 }
 
 async function sendAndRecieveFromServerVonage(
