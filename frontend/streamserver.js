@@ -2,6 +2,7 @@
 
 import Metronome from "./metronome.js";
 import { signalingServerUrl, stunServerUrl } from "./constants.js";
+import { skynetApiKey } from "./constants.js";
 import "https://webrtc.github.io/adapter/adapter-latest.js";
 import { initServer, initOTSession } from "./vonangeAPI.session.js";
 
@@ -12,7 +13,9 @@ var audioContext,
   gainNode,
   delayNode,
   channelMergerNode,
+  clientOutputNodeTwo,
   sampleRate,
+  outputMediaStream,
   loopGain; // for Web Audio API
 
 document.addEventListener("DOMContentLoaded", initDocument);
@@ -26,34 +29,6 @@ function handleError(error) {
 async function initDocument() {
   // Adding event handlers to DOM.
   document.getElementById("startServerButton").onclick = startServer;
-
-  // Creating connection to signaling server.
-  // signalingChannel = new WebSocket(signalingServerUrl)
-  // signalingChannel.onmessage = receiveMessage;
-  // signalingChannel.onopen = () =>
-  //   document.getElementById("startServerButton").disabled = false;
-
-  // session.connect(token, (error) => {
-  //   // If the connection is successful, publish to the session
-  //   if (error) {
-  //     handleError(error);
-  //   } else {
-  //     session.signal(
-  //       {
-  //         data: "hello"
-  //       },
-  //       function (error) {
-  //         if (error) {
-  //           console.log("signal error ("
-  //             + error.name
-  //             + "): " + error.message);
-  //         } else {
-  //           console.log("signal sent.");
-  //         }
-  //       }
-  //     );
-  //   }
-  // });
 }
 
 async function startServer() {
@@ -85,20 +60,21 @@ async function startServer() {
 
   console.log("Creating Web Audio.");
   audioContext = new AudioContext({ sampleRate });
-  gainNode = new GainNode(audioContext, { gain: loopGain });
-  delayNode = new DelayNode(audioContext, {
-    delayTime: loopLength,
-    maxDelayTime: loopLength,
-  });
-  channelMergerNode = new ChannelMergerNode(audioContext, {
-    numberOfInputs: 2,
-  });
+  // gainNode = new GainNode(audioContext, { gain: loopGain });
+  // delayNode = new DelayNode(audioContext, {
+  //   delayTime: loopLength,
+  //   maxDelayTime: loopLength,
+  // });
+  // channelMergerNode = new ChannelMergerNode(audioContext, {
+  //   numberOfInputs: 2,
+  // });
   clientOutputNode = new MediaStreamAudioDestinationNode(audioContext);
+  clientOutputNodeTwo = new MediaStreamAudioDestinationNode(audioContext);
 
-  gainNode.connect(delayNode);
-  delayNode.connect(gainNode);
-  gainNode.connect(channelMergerNode, 0, 0);
-  //channelMergerNode.connect(clientOutputNode);
+  // gainNode.connect(delayNode);
+  // delayNode.connect(gainNode);
+  // gainNode.connect(channelMergerNode, 0, 0);
+  // channelMergerNode.connect(clientOutputNodeOne);
 
   /*
   CLIENT           |                                  A
@@ -124,20 +100,20 @@ async function startServer() {
 CLIENT           |                                  A
 -----------------+----------------------------------+-------------------------
 SERVER           V                                  |
-          clientInputNode(s)*                clientOutputNode(s)
-                 |                                  A
-                 V                                  |
-        channelSplitterNode(s)* -----1-----> channelMergerNode(s)
-                 | 0                                |
-                 V                                  |
-           Destination(s)*                          0
-                                                    |
-                                                    |
-                                                    |
-                                                    |
-                                                SongPlayer
+          clientInputNode(s)*            clientOutputNodeTwo    clientOutputNodeOne(s)
+                 |                                  A                     |
+                 V                                  |                     |
+        channelSplitterNode(s)* -----1--------------|                     |
+                 | 0                                                      |
+                 V                                                        |
+           Destination(s)*                                                0
+                                                                          |
+                                                                          |
+                                                                          |
+                                                                          |
+                                                                      SongPlayer
  
-                                                  *created on demand
+                                                                        *created on demand
 */
 
   // const clickBuffer = await loadAudioBuffer("snd/sd2.wav");
@@ -150,11 +126,12 @@ SERVER           V                                  |
   const songBuffer = await loadAudioBuffer("snd/song.wav");
 
   function onclickstart(event) {
-    const node = new AudioBufferSourceNode(audioContext, {
+    const playNode = new AudioBufferSourceNode(audioContext, {
       buffer: songBuffer,
     });
-    node.connect(channelMergerNode, 0, 0);
-    node.start();
+    // playNode.connect(clientOutputNode, 0, 0);
+    playNode.loop = true;
+    playNode.start();
   }
 
   document.getElementById("play").onclick = onclickstart;
@@ -165,64 +142,12 @@ SERVER           V                                  |
   //   clientOutputNode.stream.getAudioTracks()[0],
   //   gotRemoteStream
   // );
-  await sendAndRecievefromClientSkyway(
-    clientOutputNode.stream,
-    gotRemoteStream
-  );
-}
+  console.log("clientOutputNode", clientOutputNode.stream.getAudioTracks());
 
-async function sendAndRecievefromClientVonage(
-  audioMediaStreamTrack,
-  remoteStreamCallBack
-) {
-  // OT
-  const { session, token } = await initOTSession();
-  console.log("session init", session);
-  // const audioTrack = audioTracks[0];
-  // const audioTrack = clientOutputNode.stream.getAudioTracks()[0];
-  const pubOptions = {
-    videoSource: null,
-    audioSource: audioMediaStreamTrack,
-    name: "serverStream",
-  };
-  const publisher = OT.initPublisher("publisher", pubOptions, handleError);
-  session.connect(token, (error) => {
-    // If the connection is successful, publish to the session
-    if (error) {
-      handleError(error);
-    } else {
-      session.publish(publisher, handleError);
-    }
-  });
+  outputMediaStream = new MediaStream();
+  outputMediaStream.addTrack(clientOutputNode.stream.getAudioTracks()[0]);
 
-  const videoElementCreated = (element) => {
-    try {
-      document.getElementById("subscriber").appendChild(element);
-      console.log(element);
-      element.muted = true;
-      var videoStream = element.captureStream();
-      remoteStreamCallBack(videoStream);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  session.on("streamCreated", (event) => {
-    const subscriber = session.subscribe(
-      event.stream,
-      {
-        insertDefaultUI: false,
-        width: "100%",
-        height: "100%",
-      },
-      handleError
-    );
-    subscriber.on("videoElementCreated", (event) => {
-      console.log("videoElementCreated");
-      videoElementCreated(event.element);
-      console.log("videoElementCreated finished");
-    });
-  });
+  await sendAndRecievefromClientSkyway(outputMediaStream, gotRemoteStream);
 }
 
 async function sendAndRecievefromClientSkyway(
@@ -232,7 +157,7 @@ async function sendAndRecievefromClientSkyway(
   // OT
   //Peer作成
   const peer = new Peer({
-    key: "7e326bf9-2bca-411a-896d-670ba36cea21",
+    key: skynetApiKey,
     debug: 3,
   });
 
@@ -265,25 +190,33 @@ function gotRemoteStream(streams) {
 
   // Workaround for Chrome from https://stackoverflow.com/a/54781147
   new Audio().srcObject = mediaStream;
+  console.log(mediaStream.getAudioTracks());
 
   const clientInputNode = new MediaStreamAudioSourceNode(audioContext, {
     mediaStream: mediaStream,
   });
+  // clientInputNode.connect(clientOutputNode);
+
   const channelSplitterNode = new ChannelSplitterNode(audioContext, {
     numberOfOutputs: 2,
   });
-  const clientGainNode = new GainNode(audioContext, { gain: 0 });
+  // const clientGainNode = new GainNode(audioContext, { gain: 0 });
 
   clientInputNode.connect(channelSplitterNode);
-  // clientInputNode.connect(audioContext.destination)
+  // // clientInputNode.connect(audioContext.destination)
 
-  channelSplitterNode.connect(channelMergerNode, 1, 1);
-  // channelSplitterNode.connect(clientGainNode, 0);
-  channelSplitterNode.connect(audioContext.destination, 0);
-  clientGainNode.connect(gainNode);
+  channelSplitterNode.connect(clientOutputNode, 0);
+  channelSplitterNode.connect(audioContext.destination, 1);
 
-  clientGainNode.gain.setValueAtTime(0, audioContext.currentTime + 0.5);
-  clientGainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + 1);
+  // channelSplitterNode.connect(clientOutputNodeTwo, 1, 1);
+
+  // //here
+  // channelSplitterNode.connect(audioContext.destination, 0);
+
+  // clientGainNode.connect(gainNode);
+
+  // clientGainNode.gain.setValueAtTime(0, audioContext.currentTime + 0.5);
+  // clientGainNode.gain.linearRampToValueAtTime(1, audioContext.currentTime + 1);
   // This is to get rid of the initial "click" when new clients connect.
   // New clients will be silenced for 0.5 seconds, then brought to full volume
   // for another 0.5 seconds. Does not really work. :-(

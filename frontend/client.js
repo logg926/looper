@@ -3,10 +3,10 @@
 import Metronome from "./metronome.js";
 import Correlator from "./correlator.js";
 import Recorder from "./recorder.js";
-import { signalingServerUrl, stunServerUrl } from "./constants.js";
+// import { signalingServerUrl, stunServerUrl } from "./constants.js";
 import "https://webrtc.github.io/adapter/adapter-latest.js";
 import { initServer, initOTSession } from "./vonangeAPI.session.js";
-
+import { skynetApiKey } from "./constants.js";
 var signalingChannel, ownId, sessionId; // for Websocket
 var connection; // for RTC
 var audioContext; // for Web Audio API
@@ -57,6 +57,7 @@ async function startStream() {
     description,
     userInputNode,
     serverOutputNode,
+    serverOutputNode2,
     channelMergerNode,
     metronome,
     tempo,
@@ -107,45 +108,39 @@ async function startStream() {
     mediaStream: userInputStream,
   });
   delayNode = new DelayNode(audioContext, { maxDelayTime: loopLength });
-  channelMergerNode = new ChannelMergerNode(audioContext, {
-    numberOfInputs: 2,
-  });
-  serverOutputNode = new MediaStreamAudioDestinationNode(audioContext);
-  metronome = new Metronome(
-    audioContext,
-    channelMergerNode,
-    60,
-    clickBuffer,
-    1
-  );
 
   userInputNode.connect(delayNode);
-  delayNode.connect(channelMergerNode, 0, 0);
-  channelMergerNode.connect(serverOutputNode);
+
+  serverOutputNode2 = new MediaStreamAudioDestinationNode(audioContext);
+  delayNode.connect(serverOutputNode2);
+
+  // channelMergerNode = new ChannelMergerNode(audioContext, {
+  //   numberOfInputs: 2,
+  // });
+
+  // delayNode.connect(channelMergerNode, 0, 0);
+  // channelMergerNode.connect(serverOutputNode);
 
   // delayNode.connect(serverOutputNode, 0, 0);
 
+  serverOutputNode = new MediaStreamAudioDestinationNode(audioContext);
+
+  metronome = new Metronome(audioContext, serverOutputNode, 60, clickBuffer, 0);
+
   metronome.start(-1);
 
-  // TODO:Creating RTC connection
-
-  // serverOutputNode.connect(audioContext.destination)
-
-  // await sendAndRecieveFromServerVonage(
-  //   serverOutputNode.stream.getAudioTracks()[0],
-  //   gotRemoteStream
-  // );
-  await sendAndRecieveFromServerSkynet(
-    serverOutputNode.stream,
-    gotRemoteStream
-  );
+  let finalStream = new MediaStream();
+  finalStream.addTrack(serverOutputNode.stream.getAudioTracks()[0]);
+  finalStream.addTrack(serverOutputNode2.stream.getAudioTracks()[0]);
+  console.log(finalStream.getAudioTracks());
+  await sendAndRecieveFromServerSkynet(finalStream, gotRemoteStream);
 }
 async function sendAndRecieveFromServerSkynet(
   audioStream,
   remoteStreamCallBack
 ) {
   const peer = new Peer({
-    key: "7e326bf9-2bca-411a-896d-670ba36cea21",
+    key: skynetApiKey,
     debug: 3,
   });
   peer.on("open", () => {
@@ -163,92 +158,38 @@ async function sendAndRecieveFromServerSkynet(
   });
 }
 
-async function sendAndRecieveFromServerVonage(
-  audioTracks,
-  remoteStreamCallBack
-) {
-  // const audioTrack = serverOutputNode.stream.getAudioTracks()[0];
-  const pubOptions = {
-    videoSource: null,
-    audioSource: audioTracks,
-    name: "clientStream",
-  };
-
-  const { session, token } = await initOTSession();
-  console.log("session init", session);
-  // const audioTrack = audioTracks[0];
-  const publisher = OT.initPublisher("publisher", pubOptions, handleError);
-  session.connect(token, (error) => {
-    // If the connection is successful, publish to the session
-    if (error) {
-      handleError(error);
-    } else {
-      session.publish(publisher, handleError);
-    }
-  });
-
-  const videoElementCreated = (element) => {
-    try {
-      document.getElementById("subscriber").appendChild(element);
-      console.log(element);
-      element.muted = true;
-      var videoStream = element.captureStream();
-      remoteStreamCallBack(videoStream);
-    } catch (e) {
-      err(e);
-    }
-  };
-
-  session.on("streamCreated", (event) => {
-    console.log("geteventStream", event);
-    // console.log('getPublisherForStream', event.target.getPublisherForStream())
-    if (event.stream.name == "serverStream") {
-      const subscriber = session.subscribe(
-        event.stream,
-        {
-          insertDefaultUI: false,
-          width: "100%",
-          height: "100%",
-        },
-        handleError
-      );
-      subscriber.on("videoElementCreated", (event) => {
-        console.log("videoElementCreated");
-        videoElementCreated(event.element);
-        console.log("videoElementCreated finished");
-      });
-    }
-  });
-}
-
-function gotRemoteStream(stream) {
-  var mediaStream, serverInputNode, channelSplitterNode;
+function gotRemoteStream(mediaStream) {
+  var serverInputNode, channelSplitterNode;
 
   console.log("Got remote media stream.");
-  mediaStream = stream;
 
+  // mediaStream.onaddtrack = (event) => {
+  //   console.log("onaddtrack", event.track.kind + ": " + event.track.label);
+  // };
   // Workaround for Chrome from https://stackoverflow.com/a/54781147
   new Audio().srcObject = mediaStream;
+  console.log("mediaStream", mediaStream.getAudioTracks());
 
   console.log("Creating server input node.");
   serverInputNode = new MediaStreamAudioSourceNode(audioContext, {
     mediaStream,
   });
 
-  console.log("Creating channel splitter node.");
-  channelSplitterNode = new ChannelSplitterNode(audioContext, {
-    numberOfOutputs: 2,
-  });
-  serverInputNode.connect(channelSplitterNode);
-  channelSplitterNode.connect(audioContext.destination, 0);
+  // console.log("Creating channel splitter node.");
+
+  // channelSplitterNode = new ChannelSplitterNode(audioContext, {
+  //   numberOfOutputs: 2,
+  // });
+  // serverInputNode.connect(channelSplitterNode);
+  // channelSplitterNode.connect(audioContext.destination, 0);
 
   console.log("Creating correlator");
   new Correlator(
     audioContext,
-    channelSplitterNode,
+    serverInputNode,
     clickBuffer,
     updateDelayNode,
-    1
+    0
   );
 
   console.log("Creating recorder");
