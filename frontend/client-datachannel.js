@@ -2,25 +2,13 @@
 
 import Metronome from "./metronome.js";
 import Correlator from "./correlator.js";
-import Recorder from "./recorder.js";
-// import { signalingServerUrl, stunServerUrl } from "./constants.js";
 import "https://webrtc.github.io/adapter/adapter-latest.js";
-import { initServer, initOTSession } from "./vonangeAPI.session.js";
 import { skynetApiKey } from "./constants.js";
-var signalingChannel, ownId, sessionId; // for Websocket
-var connection; // for RTC
 var audioContext; // for Web Audio API
 var clickBuffer; // click for latency detection
 var delayNode, userLatency; // needs to be global to access from processAudio
 var sampleRate;
 var loopLength;
-var recorder;
-
-function handleError(error) {
-  if (error) {
-    alert(error.message);
-  }
-}
 
 document.addEventListener("DOMContentLoaded", initDocument);
 
@@ -53,17 +41,8 @@ SERVER                      V                  |
 */
 
 async function startStream() {
-  var userInputStream,
-    description,
-    userInputNode,
-    serverOutputNode,
-    serverOutputNode2,
-    channelMergerNode,
-    metronome,
-    tempo,
-    loopBeats;
-
   // Disable UI
+  var tempo, loopLength;
   document.getElementById("sessionId").disabled = true;
   document.getElementById("sampleRate").disabled = true;
   document.getElementById("loopBeats").disabled = true;
@@ -76,7 +55,7 @@ async function startStream() {
   sampleRate = document.getElementById("sampleRate").value * 1;
   tempo = document.getElementById("tempo").value * 1;
   userLatency = document.getElementById("latency").value / 1000;
-  loopBeats = document.getElementById("loopBeats").value * 1;
+  const loopBeats = document.getElementById("loopBeats").value * 1;
 
   // Calculate loop lenght
   loopLength = (60 / tempo) * loopBeats; // Theoretical loop lengh, but
@@ -89,56 +68,39 @@ async function startStream() {
   console.log("Loop lengh is %.5f s, tempos is %.1f bpm.", loopLength, tempo);
 
   // Getting user media
-  userInputStream = await navigator.mediaDevices.getUserMedia({
+  const userInputStream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: false,
       noiseSuppression: false,
       channelCount: 1,
     },
   });
-
   // TODO: Assign handler to userInputStream.oninactive
 
   // Create Web Audio
   audioContext = new AudioContext({ sampleRate });
-
   clickBuffer = await loadAudioBuffer("snd/Closed_Hat.wav");
-
-  userInputNode = new MediaStreamAudioSourceNode(audioContext, {
+  const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
     mediaStream: userInputStream,
   });
   delayNode = new DelayNode(audioContext, { maxDelayTime: loopLength });
-
   userInputNode.connect(delayNode);
-
-  // serverOutputNode2 = new MediaStreamAudioDestinationNode(audioContext);
-  // delayNode.connect(serverOutputNode2);
-
-  channelMergerNode = new ChannelMergerNode(audioContext, {
+  const channelMergerNode = new ChannelMergerNode(audioContext, {
     numberOfInputs: 2,
   });
-
   delayNode.connect(channelMergerNode, 0, 0);
-
-  // delayNode.connect(serverOutputNode, 0, 0);
-
-  serverOutputNode = new MediaStreamAudioDestinationNode(audioContext);
-
-  metronome = new Metronome(
+  const serverOutputNode = new MediaStreamAudioDestinationNode(audioContext);
+  const metronome = new Metronome(
     audioContext,
     channelMergerNode,
     60,
     clickBuffer,
     1
   );
-
   channelMergerNode.connect(serverOutputNode);
-
   metronome.start(-1);
-
-  let finalStream = new MediaStream();
+  const finalStream = new MediaStream();
   finalStream.addTrack(serverOutputNode.stream.getAudioTracks()[0]);
-  // finalStream.addTrack(serverOutputNode2.stream.getAudioTracks()[0]);
   console.log(finalStream.getAudioTracks());
   await sendAndRecieveFromServerSkynet(finalStream, gotRemoteStream);
 }
@@ -166,25 +128,15 @@ async function sendAndRecieveFromServerSkynet(
 }
 
 function gotRemoteStream(mediaStream) {
-  var serverInputNode, channelSplitterNode;
-
   console.log("Got remote media stream.");
-
-  // mediaStream.onaddtrack = (event) => {
-  //   console.log("onaddtrack", event.track.kind + ": " + event.track.label);
-  // };
   // Workaround for Chrome from https://stackoverflow.com/a/54781147
   new Audio().srcObject = mediaStream;
   console.log("mediaStream", mediaStream.getAudioTracks());
-
   console.log("Creating server input node.");
-  serverInputNode = new MediaStreamAudioSourceNode(audioContext, {
+  const serverInputNode = new MediaStreamAudioSourceNode(audioContext, {
     mediaStream,
   });
-
-  // console.log("Creating channel splitter node.");
-
-  channelSplitterNode = new ChannelSplitterNode(audioContext, {
+  const channelSplitterNode = new ChannelSplitterNode(audioContext, {
     numberOfOutputs: 2,
   });
   serverInputNode.connect(channelSplitterNode);
@@ -198,14 +150,7 @@ function gotRemoteStream(mediaStream) {
     updateDelayNode,
     1
   );
-
   console.log("Creating recorder");
-  // const recordingNode = new MediaStreamAudioDestinationNode(audioContext);
-  // channelSplitterNode.connect(recordingNode, 0);
-  // const downloadButton = document.getElementById("downloadButton");
-  // recorder = new Recorder(recordingNode.stream, downloadButton);
-  // recorder.start();
-
   document.getElementById("stopButton").disabled = false;
 }
 
@@ -222,11 +167,6 @@ function updateDelayNode(networkLatency) {
   delayNode.delayTime.value = loopLength - totalLatency;
 }
 
-// function signal(message) {
-//   message.from = ownId;
-//   signalingChannel.send(JSON.stringify(message));
-// }
-
 async function loadAudioBuffer(url) {
   var response, audioData, buffer;
 
@@ -241,6 +181,4 @@ async function loadAudioBuffer(url) {
 function stopStream() {
   document.getElementById("stopButton").disabled = true;
   console.log("Leaving the session");
-  recorder.stop();
-  connection.close();
 }
