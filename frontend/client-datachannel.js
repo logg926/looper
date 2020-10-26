@@ -113,39 +113,82 @@ async function startStream() {
 }
 let outputsample;
 let PCMbuffer = [];
+let scriptNodeStartingTime;
+
+function pushPCMbuffer(PCMbuffer, item) {
+  //normal case
+  //console.log('b4', PCMbuffer.map(x => x.correspondingSecond))
+  PCMbuffer.push(item)
+  // point to end first
+  let pos = PCMbuffer.length - 2
+  while (pos >= 0 && PCMbuffer[pos].correspondingSecond > item.correspondingSecond) {
+    PCMbuffer[pos + 1] = PCMbuffer[pos];
+    pos--;
+  }
+  PCMbuffer[pos + 1] = item;
+
+  //console.log('aft', PCMbuffer.map(x => x.correspondingSecond))
+  return PCMbuffer
+}
+function popPCMbuffer(PCMbuffer, time, end) {
+  while (PCMbuffer[0] && PCMbuffer[0].correspondingSecond < time) {
+    PCMbuffer.shift()
+  }
+  const result = PCMbuffer[0]
+  if (result && result.correspondingSecond <= end) return result
+  else return null
+}
+
 function processAudioToPCM(event) {
-  var array, i, networkLatency, bufferSize, bufferDuration;
-  var startSecond, endSecond, boundarySample, currentPlaybackTime;
+  var array, i, networkLatency;
+  var correspondingSecond, boundarySample, currentPlaybackTime;
   var playbackTimeAdjustment;
 
   array = event.inputBuffer.getChannelData(0);
-  startSecond = event.playbackTime;
-
+  const startSecond = event.playbackTime;
+  const bufferSize = event.inputBuffer.length;
+  const bufferDuration = event.inputBuffer.duration;
+  const endSecond = event.playbackTime + bufferDuration
+  if (!scriptNodeStartingTime) {
+    scriptNodeStartingTime = startSecond
+  }
   //if (!outputsample) {
   outputsample = {
-    startSecond,
+    correspondingSecond: startSecond - scriptNodeStartingTime,
     pcm: array,
   };
   //console.log(outputsample);
-  PCMbuffer.push(outputsample);
+  pushPCMbuffer(PCMbuffer, outputsample);
+  //console.log('pushedPCM', PCMbuffer)
   //}
 }
 function processAudioFromPCM(event) {
-  var array, i, networkLatency, bufferSize, bufferDuration;
-  var startSecond, endSecond, boundarySample, currentPlaybackTime;
-  var playbackTimeAdjustment;
+  console.log("--------------------")
 
-  array = event.inputBuffer.getChannelData(0);
-  startSecond = event.playbackTime;
+  const delay = 2
+  const startSecond = event.playbackTime;
+  const bufferSize = event.inputBuffer.length;
+  const bufferDuration = event.inputBuffer.duration;
+  const endSecond = event.playbackTime + bufferDuration
+  //console.log("frompcm", startSecond)
 
-  //if (!outputsample) {
-  outputsample = {
-    startSecond,
-    pcm: array,
-  };
-  //console.log(outputsample);
-  PCMbuffer.push(outputsample);
-  //}
+  console.log('PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
+  const result = popPCMbuffer(PCMbuffer, startSecond - delay, endSecond - delay)
+  console.log('from', startSecond - delay, 'to', endSecond - delay)
+  console.log('PCM', result)
+  console.log('PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
+
+  // var array, i, networkLatency, bufferSize, bufferDuration;
+  // var startSecond, endSecond, boundarySample, currentPlaybackTime;
+  // var playbackTimeAdjustment;
+
+  //find PCM buffer for corr time interval
+  // Delay 
+  // PCMbuffer search for correspondingSecond from start+delay to start+ bufferduration +delay
+  // past  remove from buffer
+  // future keep in buffer
+
+
 }
 async function sendAndRecieveFromServerSkynet(
   audioStream,
