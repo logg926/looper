@@ -79,30 +79,49 @@ async function startStream() {
 
   // Create Web Audio
   audioContext = new AudioContext({ sampleRate });
-  clickBuffer = await loadAudioBuffer("snd/Closed_Hat.wav");
+
+  // clickBuffer = await loadAudioBuffer("snd/Closed_Hat.wav");
   const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
     mediaStream: userInputStream,
   });
-  delayNode = new DelayNode(audioContext, { maxDelayTime: loopLength });
-  userInputNode.connect(delayNode);
-  const channelMergerNode = new ChannelMergerNode(audioContext, {
-    numberOfInputs: 2,
-  });
-  delayNode.connect(channelMergerNode, 0, 0);
-  const serverOutputNode = new MediaStreamAudioDestinationNode(audioContext);
-  const metronome = new Metronome(
-    audioContext,
-    channelMergerNode,
-    60,
-    clickBuffer,
-    1
-  );
-  channelMergerNode.connect(serverOutputNode);
-  metronome.start(-1);
-  const finalStream = new MediaStream();
-  finalStream.addTrack(serverOutputNode.stream.getAudioTracks()[0]);
-  console.log(finalStream.getAudioTracks());
-  await sendAndRecieveFromServerSkynet(finalStream, gotRemoteStream);
+
+  const scriptProcessor = audioContext.createScriptProcessor(16384, 1, 1);
+  scriptProcessor.onaudioprocess = processAudioToPCM;
+
+  // work around it output nothing
+
+  const songBuffer = await loadAudioBuffer("snd/song.wav");
+
+  function onclickstart(event) {
+    const playNode = new AudioBufferSourceNode(audioContext, {
+      buffer: songBuffer,
+    });
+    playNode.connect(audioContext.destination, 0, 0);
+    playNode.loop = true;
+    playNode.start();
+    userInputNode.connect(scriptProcessor);
+    scriptProcessor.connect(audioContext.destination);
+  }
+
+  document.getElementById("play").onclick = onclickstart;
+}
+let outputsample;
+function processAudioToPCM(event) {
+  var array, i, networkLatency, bufferSize, bufferDuration;
+  var startSecond, endSecond, boundarySample, currentPlaybackTime;
+  var playbackTimeAdjustment;
+
+  array = event.inputBuffer.getChannelData(0);
+  startSecond = event.playbackTime;
+
+  if (!outputsample) {
+    outputsample = {
+      startSecond,
+      pcm: array,
+    };
+
+    console.log(outputsample);
+  }
 }
 async function sendAndRecieveFromServerSkynet(
   audioStream,
@@ -116,69 +135,32 @@ async function sendAndRecieveFromServerSkynet(
     console.log("sky net: open ");
     document.getElementById("my-id").textContent = peer.id;
   });
-  peer.on("call", (mediaConnection) => {
-    mediaConnection.answer(audioStream);
-    mediaConnection.on("stream", (stream) => {
-      remoteStreamCallBack(stream);
+
+  peer.on("connection", (dataConnection) => {
+    console.log("established datachannel :", dataConnection);
+    dataConnection.on("open", () => {
+      const data = {
+        name: "SkyWay",
+        msg: "Hello, World!",
+      };
+      dataConnection.send(data);
     });
+    // ...
   });
   peer.on("error", (err) => {
     alert(err.message);
   });
 }
 
-function gotRemoteStream(mediaStream) {
-  console.log("Got remote media stream.");
-  // Workaround for Chrome from https://stackoverflow.com/a/54781147
-  new Audio().srcObject = mediaStream;
-  console.log("mediaStream", mediaStream.getAudioTracks());
-  console.log("Creating server input node.");
-  const serverInputNode = new MediaStreamAudioSourceNode(audioContext, {
-    mediaStream,
-  });
-  const channelSplitterNode = new ChannelSplitterNode(audioContext, {
-    numberOfOutputs: 2,
-  });
-  serverInputNode.connect(channelSplitterNode);
-  channelSplitterNode.connect(audioContext.destination, 0);
-
-  console.log("Creating correlator");
-  new Correlator(
-    audioContext,
-    channelSplitterNode,
-    clickBuffer,
-    updateDelayNode,
-    1
-  );
-  console.log("Creating recorder");
-  document.getElementById("stopButton").disabled = false;
-}
-
-function updateDelayNode(networkLatency) {
-  const totalLatency = userLatency + networkLatency;
-
-  console.log(
-    "Latency: %.2f ms (user) + %.2f ms (network) = %.2f ms.",
-    1000 * userLatency,
-    1000 * networkLatency,
-    1000 * totalLatency
-  );
-
-  delayNode.delayTime.value = loopLength - totalLatency;
-}
-
-async function loadAudioBuffer(url) {
-  var response, audioData, buffer;
-
-  console.log("Loading audio data from %s.", url);
-  response = await fetch(url);
-  audioData = await response.arrayBuffer();
-  buffer = await audioContext.decodeAudioData(audioData);
-  console.log("Loaded audio data from %s.", url);
-  return buffer;
-}
-
 function stopStream() {
   document.getElementById("stopButton").disabled = true;
   console.log("Leaving the session");
+}
+
+async function loadAudioBuffer(url) {
+  console.log("Loading audio data from %s.", url);
+  const response = await fetch(url);
+  const audioData = await response.arrayBuffer();
+  const buffer = await audioContext.decodeAudioData(audioData);
+  return buffer;
 }
