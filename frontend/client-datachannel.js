@@ -116,10 +116,11 @@ let PCMbuffer = [];
 let scriptNodeStartingTime;
 
 function pushPCMbuffer(PCMbuffer, item) {
-  //normal case
+
   //console.log('b4', PCMbuffer.map(x => x.correspondingSecond))
+
   PCMbuffer.push(item)
-  // point to end first
+  //insertion sort with only last item unsorted
   let pos = PCMbuffer.length - 2
   while (pos >= 0 && PCMbuffer[pos].correspondingSecond > item.correspondingSecond) {
     PCMbuffer[pos + 1] = PCMbuffer[pos];
@@ -128,12 +129,16 @@ function pushPCMbuffer(PCMbuffer, item) {
   PCMbuffer[pos + 1] = item;
 
   //console.log('aft', PCMbuffer.map(x => x.correspondingSecond))
+
   return PCMbuffer
 }
 function popPCMbuffer(PCMbuffer, time, end) {
+
+  // past  remove from buffer, future keep in buffer
   while (PCMbuffer[0] && PCMbuffer[0].correspondingSecond < time) {
     PCMbuffer.shift()
   }
+  // PCMbuffer search for correspondingSecond from time to end
   const result = PCMbuffer[0]
   if (result && result.correspondingSecond <= end) return result
   else return null
@@ -158,35 +163,48 @@ function processAudioToPCM(event) {
     pcm: array,
   };
   //console.log(outputsample);
+
+
   pushPCMbuffer(PCMbuffer, outputsample);
-  //console.log('pushedPCM', PCMbuffer)
+
+  /* Test with dummy network delay (seems works)
+  setTimeout((outputsample) => {
+    if (PCMbuffer[-1] && PCMbuffer[-1].correspondingSecond > outputsample.correspondingSecond) {
+      console.log('SPECIAL')
+    }
+    console.log('insert', outputsample.correspondingSecond)
+    pushPCMbuffer(PCMbuffer, outputsample);
+
+    console.log('pushedPCM', PCMbuffer.map(x => x.correspondingSecond))
+
+  }, 1000 * Math.random(), outputsample);
+  */
+
+
   //}
 }
 function processAudioFromPCM(event) {
-  console.log("--------------------")
+
+  // var array, i, networkLatency, bufferSize, bufferDuration;
+  // var startSecond, endSecond, boundarySample, currentPlaybackTime;
+  // var playbackTimeAdjustment;
 
   const delay = 2
   const startSecond = event.playbackTime;
   const bufferSize = event.inputBuffer.length;
   const bufferDuration = event.inputBuffer.duration;
   const endSecond = event.playbackTime + bufferDuration
-  //console.log("frompcm", startSecond)
 
-  console.log('PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
+  //Test for PCM Buffer (it works)
+  console.log("--------------------")
+  console.log('before PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
+
   const result = popPCMbuffer(PCMbuffer, startSecond - delay, endSecond - delay)
-  console.log('from', startSecond - delay, 'to', endSecond - delay)
+
+  //Test for PCM Buffer (it works)
+  console.log('now', startSecond, 'from', startSecond - delay, 'to', endSecond - delay)
   console.log('PCM', result)
-  console.log('PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
-
-  // var array, i, networkLatency, bufferSize, bufferDuration;
-  // var startSecond, endSecond, boundarySample, currentPlaybackTime;
-  // var playbackTimeAdjustment;
-
-  //find PCM buffer for corr time interval
-  // Delay 
-  // PCMbuffer search for correspondingSecond from start+delay to start+ bufferduration +delay
-  // past  remove from buffer
-  // future keep in buffer
+  console.log('after PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
 
 
 }
