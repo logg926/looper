@@ -88,9 +88,17 @@ async function startStream() {
   const scriptProcessor = audioContext.createScriptProcessor(16384, 1, 1);
   scriptProcessor.onaudioprocess = processAudioToPCM;
 
-  // work around it output nothing
+  const scriptProcessorEnd = audioContext.createScriptProcessor(16384, 1, 1);
+  scriptProcessorEnd.onaudioprocess = processAudioFromPCM;
+
 
   const songBuffer = await loadAudioBuffer("snd/song.wav");
+  userInputNode.connect(scriptProcessor);
+  // work around it output nothing
+  scriptProcessor.connect(audioContext.destination);
+
+  scriptProcessorEnd.connect(audioContext.destination)
+
 
   function onclickstart(event) {
     const playNode = new AudioBufferSourceNode(audioContext, {
@@ -99,29 +107,123 @@ async function startStream() {
     playNode.connect(audioContext.destination, 0, 0);
     playNode.loop = true;
     playNode.start();
-    userInputNode.connect(scriptProcessor);
-    scriptProcessor.connect(audioContext.destination);
   }
 
   document.getElementById("play").onclick = onclickstart;
 }
 let outputsample;
+let PCMbuffer = [];
+let scriptNodeStartingTime;
+
+function pushPCMbuffer(PCMbuffer, item) {
+
+  //console.log('b4', PCMbuffer.map(x => x.correspondingSecond))
+
+  PCMbuffer.push(item)
+  //insertion sort with only last item unsorted
+  let pos = PCMbuffer.length - 2
+  while (pos >= 0 && PCMbuffer[pos].correspondingSecond > item.correspondingSecond) {
+    PCMbuffer[pos + 1] = PCMbuffer[pos];
+    pos--;
+  }
+  PCMbuffer[pos + 1] = item;
+
+  //console.log('aft', PCMbuffer.map(x => x.correspondingSecond))
+
+  return PCMbuffer
+}
+function popPCMbuffer(PCMbuffer, time, end) {
+
+  // past  remove from buffer, future keep in buffer
+  while (PCMbuffer[0] && PCMbuffer[0].correspondingSecond < time) {
+    PCMbuffer.shift()
+  }
+  // PCMbuffer search for correspondingSecond from time to end
+  const result = PCMbuffer[0]
+  if (result && result.correspondingSecond <= end) return result
+  else return null
+}
+
 function processAudioToPCM(event) {
-  var array, i, networkLatency, bufferSize, bufferDuration;
-  var startSecond, endSecond, boundarySample, currentPlaybackTime;
+  var array, i, networkLatency;
+  var correspondingSecond, boundarySample, currentPlaybackTime;
   var playbackTimeAdjustment;
 
   array = event.inputBuffer.getChannelData(0);
-  startSecond = event.playbackTime;
-
-  if (!outputsample) {
-    outputsample = {
-      startSecond,
-      pcm: array,
-    };
-
-    console.log(outputsample);
+  const startSecond = event.playbackTime;
+  const bufferSize = event.inputBuffer.length;
+  const bufferDuration = event.inputBuffer.duration;
+  const endSecond = event.playbackTime + bufferDuration
+  if (!scriptNodeStartingTime) {
+    scriptNodeStartingTime = startSecond
   }
+  //if (!outputsample) {
+  outputsample = {
+    correspondingSecond: startSecond - scriptNodeStartingTime,
+    pcm: array,
+  };
+  //console.log(outputsample);
+
+
+  pushPCMbuffer(PCMbuffer, outputsample);
+
+  /* Test with dummy network delay (seems works)
+  setTimeout((outputsample) => {
+    if (PCMbuffer[-1] && PCMbuffer[-1].correspondingSecond > outputsample.correspondingSecond) {
+      console.log('SPECIAL')
+    }
+    console.log('insert', outputsample.correspondingSecond)
+    pushPCMbuffer(PCMbuffer, outputsample);
+
+    console.log('pushedPCM', PCMbuffer.map(x => x.correspondingSecond))
+
+  }, 1000 * Math.random(), outputsample);
+  */
+
+
+  //}
+}
+function processAudioFromPCM(event) {
+
+  // var array, i, networkLatency, bufferSize, bufferDuration;
+  // var startSecond, endSecond, boundarySample, currentPlaybackTime;
+  // var playbackTimeAdjustment;
+
+  const delay = 2
+  const startSecond = event.playbackTime;
+  const bufferSize = event.inputBuffer.length;
+  const bufferDuration = event.inputBuffer.duration;
+  const endSecond = event.playbackTime + bufferDuration
+
+  //Test for PCM Buffer (it works)
+  //console.log("--------------------")
+  //console.log('before PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
+
+  const result = popPCMbuffer(PCMbuffer, startSecond - delay, endSecond - delay)
+
+  //Test for PCM Buffer (it works)
+  //console.log('now', startSecond, 'from', startSecond - delay, 'to', endSecond - delay)
+  //console.log('PCM', result)
+  //console.log('after PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
+
+  //play
+  // The output buffer contains the samples that will be modified and played
+  let outputBuffer = event.outputBuffer;
+
+  var inputData = result && result.pcm
+  let outputData = outputBuffer.getChannelData(0);
+
+  // Loop through the 4096 samples
+  for (var sample = 0; sample < outputBuffer.length; sample++) {
+    // make output equal to the same as the input
+    outputData[sample] = inputData ? inputData[sample] : 0;
+
+  }
+  console.log(inputData)
+  //console.log(inputData && inputData.sum())
+
+
+
 }
 async function sendAndRecieveFromServerSkynet(
   audioStream,
