@@ -196,15 +196,32 @@ function processAudioFromPCM(event) {
   const endSecond = event.playbackTime + bufferDuration
 
   //Test for PCM Buffer (it works)
-  console.log("--------------------")
-  console.log('before PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
+  //console.log("--------------------")
+  //console.log('before PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
 
   const result = popPCMbuffer(PCMbuffer, startSecond - delay, endSecond - delay)
 
   //Test for PCM Buffer (it works)
-  console.log('now', startSecond, 'from', startSecond - delay, 'to', endSecond - delay)
-  console.log('PCM', result)
-  console.log('after PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
+  //console.log('now', startSecond, 'from', startSecond - delay, 'to', endSecond - delay)
+  //console.log('PCM', result)
+  //console.log('after PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
+
+  //play
+  // The output buffer contains the samples that will be modified and played
+  let outputBuffer = event.outputBuffer;
+
+  var inputData = result && result.pcm
+  let outputData = outputBuffer.getChannelData(0);
+
+  // Loop through the 4096 samples
+  for (var sample = 0; sample < outputBuffer.length; sample++) {
+    // make output equal to the same as the input
+    outputData[sample] = inputData ? inputData[sample] : 0;
+
+  }
+  console.log(inputData)
+  //console.log(inputData && inputData.sum())
+
 
 
 }
