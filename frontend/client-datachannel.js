@@ -88,9 +88,17 @@ async function startStream() {
   const scriptProcessor = audioContext.createScriptProcessor(16384, 1, 1);
   scriptProcessor.onaudioprocess = processAudioToPCM;
 
-  // work around it output nothing
+  const scriptProcessorEnd = audioContext.createScriptProcessor(16384, 1, 1);
+  scriptProcessorEnd.onaudioprocess = processAudioFromPCM;
+
 
   const songBuffer = await loadAudioBuffer("snd/song.wav");
+  userInputNode.connect(scriptProcessor);
+  // work around it output nothing
+  scriptProcessor.connect(audioContext.destination);
+
+  scriptProcessorEnd.connect(audioContext.destination)
+
 
   function onclickstart(event) {
     const playNode = new AudioBufferSourceNode(audioContext, {
@@ -99,13 +107,12 @@ async function startStream() {
     playNode.connect(audioContext.destination, 0, 0);
     playNode.loop = true;
     playNode.start();
-    userInputNode.connect(scriptProcessor);
-    scriptProcessor.connect(audioContext.destination);
   }
 
   document.getElementById("play").onclick = onclickstart;
 }
 let outputsample;
+let PCMbuffer = [];
 function processAudioToPCM(event) {
   var array, i, networkLatency, bufferSize, bufferDuration;
   var startSecond, endSecond, boundarySample, currentPlaybackTime;
@@ -114,14 +121,31 @@ function processAudioToPCM(event) {
   array = event.inputBuffer.getChannelData(0);
   startSecond = event.playbackTime;
 
-  if (!outputsample) {
-    outputsample = {
-      startSecond,
-      pcm: array,
-    };
+  //if (!outputsample) {
+  outputsample = {
+    startSecond,
+    pcm: array,
+  };
+  //console.log(outputsample);
+  PCMbuffer.push(outputsample);
+  //}
+}
+function processAudioFromPCM(event) {
+  var array, i, networkLatency, bufferSize, bufferDuration;
+  var startSecond, endSecond, boundarySample, currentPlaybackTime;
+  var playbackTimeAdjustment;
 
-    console.log(outputsample);
-  }
+  array = event.inputBuffer.getChannelData(0);
+  startSecond = event.playbackTime;
+
+  //if (!outputsample) {
+  outputsample = {
+    startSecond,
+    pcm: array,
+  };
+  //console.log(outputsample);
+  PCMbuffer.push(outputsample);
+  //}
 }
 async function sendAndRecieveFromServerSkynet(
   audioStream,
