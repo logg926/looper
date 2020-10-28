@@ -19,27 +19,6 @@ async function initDocument() {
   document.getElementById("stopButton").onclick = stopStream;
 }
 
-/*                                               * created in gotRemoteStream
-
-USER                        |                  A
-----------------------------+------------------+------------------------------
-CLIENT                      |                  |
-                            V                  |
-                     userInputNode        destination
-                            |                  A
-                            V                  |
-                       delay Node              +---------> recordingNode*
-                            |                  |
-               1            V 0                | 0          1
-metronome -----> channelMergerNode     channelSplitterNode* ----> correlator*
-                            |                  A
-                            V                  |
-                    serverOutputNode    serverInputNode*
-CLIENT                      |                  A
-----------------------------+------------------+------------------------------
-SERVER                      V                  |
-*/
-
 async function startStream() {
   // Disable UI
   var tempo, loopLength;
@@ -52,20 +31,6 @@ async function startStream() {
 
   // Get user input
   // sessionId = document.getElementById("sessionId").value;
-  sampleRate = document.getElementById("sampleRate").value * 1;
-  tempo = document.getElementById("tempo").value * 1;
-  userLatency = document.getElementById("latency").value / 1000;
-  const loopBeats = document.getElementById("loopBeats").value * 1;
-
-  // Calculate loop lenght
-  loopLength = (60 / tempo) * loopBeats; // Theoretical loop lengh, but
-  loopLength = (Math.round((loopLength * sampleRate) / 128) * 128) / sampleRate;
-  tempo = (60 / loopLength) * loopBeats;
-  // according to the Web Audio API specification, "If DelayNode is part of a
-  // cycle, then the value of the delayTime attribute is clamped to a minimum
-  // of one render quantum."  We do this explicitly here so we can sync the
-  // metronome.
-  console.log("Loop lengh is %.5f s, tempos is %.1f bpm.", loopLength, tempo);
 
   // Getting user media
   const userInputStream = await navigator.mediaDevices.getUserMedia({
@@ -75,7 +40,6 @@ async function startStream() {
       channelCount: 1,
     },
   });
-  // TODO: Assign handler to userInputStream.oninactive
 
   // Create Web Audio
   audioContext = new AudioContext({ sampleRate });
@@ -91,22 +55,20 @@ async function startStream() {
   const scriptProcessorEnd = audioContext.createScriptProcessor(16384, 1, 1);
   scriptProcessorEnd.onaudioprocess = processAudioFromPCM;
 
+  scriptProcessorEnd.connect(audioContext.destination);
 
-  const songBuffer = await loadAudioBuffer("snd/song.wav");
   userInputNode.connect(scriptProcessor);
   // work around it output nothing
   scriptProcessor.connect(audioContext.destination);
 
-  scriptProcessorEnd.connect(audioContext.destination)
-
-
+  // const songBuffer = await loadAudioBuffer("snd/song.wav");
   function onclickstart(event) {
-    const playNode = new AudioBufferSourceNode(audioContext, {
-      buffer: songBuffer,
-    });
-    playNode.connect(audioContext.destination, 0, 0);
-    playNode.loop = true;
-    playNode.start();
+    // const playNode = new AudioBufferSourceNode(audioContext, {
+    //   buffer: songBuffer,
+    // });
+    // playNode.connect(audioContext.destination, 0, 0);
+    // playNode.loop = true;
+    // playNode.start();
   }
 
   document.getElementById("play").onclick = onclickstart;
@@ -116,13 +78,15 @@ let PCMbuffer = [];
 let scriptNodeStartingTime;
 
 function pushPCMbuffer(PCMbuffer, item) {
-
   //console.log('b4', PCMbuffer.map(x => x.correspondingSecond))
 
-  PCMbuffer.push(item)
+  PCMbuffer.push(item);
   //insertion sort with only last item unsorted
-  let pos = PCMbuffer.length - 2
-  while (pos >= 0 && PCMbuffer[pos].correspondingSecond > item.correspondingSecond) {
+  let pos = PCMbuffer.length - 2;
+  while (
+    pos >= 0 &&
+    PCMbuffer[pos].correspondingSecond > item.correspondingSecond
+  ) {
     PCMbuffer[pos + 1] = PCMbuffer[pos];
     pos--;
   }
@@ -130,18 +94,17 @@ function pushPCMbuffer(PCMbuffer, item) {
 
   //console.log('aft', PCMbuffer.map(x => x.correspondingSecond))
 
-  return PCMbuffer
+  return PCMbuffer;
 }
 function popPCMbuffer(PCMbuffer, time, end) {
-
   // past  remove from buffer, future keep in buffer
   while (PCMbuffer[0] && PCMbuffer[0].correspondingSecond < time) {
-    PCMbuffer.shift()
+    PCMbuffer.shift();
   }
   // PCMbuffer search for correspondingSecond from time to end
-  const result = PCMbuffer[0]
-  if (result && result.correspondingSecond <= end) return result
-  else return null
+  const result = PCMbuffer[0];
+  if (result && result.correspondingSecond <= end) return result;
+  else return null;
 }
 
 function processAudioToPCM(event) {
@@ -153,9 +116,9 @@ function processAudioToPCM(event) {
   const startSecond = event.playbackTime;
   const bufferSize = event.inputBuffer.length;
   const bufferDuration = event.inputBuffer.duration;
-  const endSecond = event.playbackTime + bufferDuration
+  const endSecond = event.playbackTime + bufferDuration;
   if (!scriptNodeStartingTime) {
-    scriptNodeStartingTime = startSecond
+    scriptNodeStartingTime = startSecond;
   }
   //if (!outputsample) {
   outputsample = {
@@ -163,7 +126,6 @@ function processAudioToPCM(event) {
     pcm: array,
   };
   //console.log(outputsample);
-
 
   pushPCMbuffer(PCMbuffer, outputsample);
 
@@ -180,26 +142,28 @@ function processAudioToPCM(event) {
   }, 1000 * Math.random(), outputsample);
   */
 
-
   //}
 }
 function processAudioFromPCM(event) {
-
   // var array, i, networkLatency, bufferSize, bufferDuration;
   // var startSecond, endSecond, boundarySample, currentPlaybackTime;
   // var playbackTimeAdjustment;
 
-  const delay = 2
+  const delay = 2;
   const startSecond = event.playbackTime;
   const bufferSize = event.inputBuffer.length;
   const bufferDuration = event.inputBuffer.duration;
-  const endSecond = event.playbackTime + bufferDuration
+  const endSecond = event.playbackTime + bufferDuration;
 
   //Test for PCM Buffer (it works)
   //console.log("--------------------")
   //console.log('before PCMbuffer', PCMbuffer.map(x => x.correspondingSecond))
 
-  const result = popPCMbuffer(PCMbuffer, startSecond - delay, endSecond - delay)
+  const result = popPCMbuffer(
+    PCMbuffer,
+    startSecond - delay,
+    endSecond - delay
+  );
 
   //Test for PCM Buffer (it works)
   //console.log('now', startSecond, 'from', startSecond - delay, 'to', endSecond - delay)
@@ -210,20 +174,16 @@ function processAudioFromPCM(event) {
   // The output buffer contains the samples that will be modified and played
   let outputBuffer = event.outputBuffer;
 
-  var inputData = result && result.pcm
+  var inputData = result && result.pcm;
   let outputData = outputBuffer.getChannelData(0);
 
   // Loop through the 4096 samples
   for (var sample = 0; sample < outputBuffer.length; sample++) {
     // make output equal to the same as the input
     outputData[sample] = inputData ? inputData[sample] : 0;
-
   }
-  console.log(inputData)
+  console.log(inputData);
   //console.log(inputData && inputData.sum())
-
-
-
 }
 async function sendAndRecieveFromServerSkynet(
   audioStream,
