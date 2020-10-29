@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Looper</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  </head>
+
+  <body>
+    <h1>looper - make music together online in a loop</h1>
+    <p>
+      This is a tool for making music together in times of quarantine. Still
+      work in progress. To try anyway (no guarantees!), proceed as indicated
+      below.
+    </p>
+    <p>Notes/recommendations</p>
+    <ul>
+      <li>
+        Error signaling is still mostly via the developer console. Enter Ctrl +
+        Shift + K (Firefox) resp. Ctrl + Shift + I (Chrome) on each page to open
+        it and keep it open.
+      </li>
+      <li>
+        At each page you will have to select the sample rate. It seems systems
+        are picky about which sample rate to work with and most of them like to
+        work at 44100 Hz, so this is the default setting. If you observe the
+        error message "Connecting AudioNodes from AudioContexts with different
+        sample-rate is currently not supported," you have an issue with the
+        sample rate. Try 48000 Hz in this case!
+      </li>
+      <li>
+        48000 Hz makes actually more sense, since 44100 Hz is not supported by
+        the Opus codec (RFC 7587). On Ubuntu, you can switch to 48000 Hz by
+        adding the line "default-sample-rate = 48000" to /etc/pulse/daemon.conf.
+        (Remove the initial "; " if present.)
+      </li>
+      <li>
+        In any case the sample rate for the session and all clients must match.
+      </li>
+      <li>
+        This has only been tested with Firefox and Chrome at the moment.
+      </li>
+    </ul>
+    <p>
+      Steps to use:
+    </p>
+    <ol>
+      <li>
+        Unplug your headphones.
+      </li>
+      <li>
+        Use the <a href="crosscorrelation.html">latency detector</a> to measure
+        the latency of your system. Note down the value once it stabilizes.
+      </li>
+      <li>
+        Now use your headphones.
+      </li>
+      <li>
+        Open the <a href="streamserver.html">session manager</a> in a new tab.
+      </li>
+      <li>
+        Click the start button and copy the session ID to the clipboard.
+      </li>
+      <li>
+        Open the <a href="client.html">client</a> in a new tab. (If you can
+        memorize the rest of these instructions, same tab is fine.)
+      </li>
+      <li>
+        Enter the session ID and your system latency and click start. Now you
+        can already rock solo.
+      </li>
+      <li>
+        Share the session ID with your friends and play together.
+      </li>
+      <li>
+        <a href="test-client.html">test client</a>
+      </li>
+      <li>
+        <a href="streamserver-datachannel.html">streamserver-datachannel</a>
+      </li>
+      <li>
+        <a href="client-datachannel.html">client-datachannel</a>
+      </li>
+      <li>
+        <a href="single-datachannel.html">single-datachannel</a>
+      </li>
+    </ol>
+    <p>
+      More information:
+    </p>
+    <ul>
+      <li>
+        See <a href="https://github.com/ntgiwsvp/looper">GitHub</a> for
+        background and contact information on the project.
+      </li>
+    </ul>
+  </body>
+</html>
