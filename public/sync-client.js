@@ -1,5 +1,5 @@
 let scriptNodeStartingTime;
-
+let index;
 export const processAudioToPCMFactory = (sendPCMToServerFn) => {
   const processAudioToPCM = (event) => {
     var array, i, networkLatency;
@@ -13,12 +13,18 @@ export const processAudioToPCMFactory = (sendPCMToServerFn) => {
     const endSecond = event.playbackTime + bufferDuration;
     if (!scriptNodeStartingTime) {
       scriptNodeStartingTime = startSecond;
+      index = 0;
     }
     const outputsample = {
+      //legacy
       correspondingSecond: startSecond - scriptNodeStartingTime,
+      //new added index
+      packageIndex: index,
       pcm: array,
     };
     sendPCMToServerFn(outputsample);
+
+    index += 1;
   };
 
   return processAudioToPCM;

@@ -19,12 +19,13 @@ export function pushPCMbuffer(item) {
 }
 
 export function processAudioFromPCM(event) {
-  const delay = MasterDelay;
   const startSecond = event.playbackTime;
   const bufferSize = event.inputBuffer.length;
   const bufferDuration = event.inputBuffer.duration;
   const endSecond = event.playbackTime + bufferDuration;
   startScriptEndNodeStartingTime(startSecond);
+
+  const delay = MasterDelay;
   if (scriptEndNodeStartingTime) {
     const result = popPCMbuffer(
       PCMbuffer,
@@ -62,6 +63,7 @@ export function processAudioFromPCM(event) {
         outputData[sample] = 0;
       }
     }
+    /*
     result.map((input) => {
       const inputData = input.pcm;
       //console.log('inputputData',inputData)
@@ -71,8 +73,19 @@ export function processAudioFromPCM(event) {
         outputData[sample] = inputData[sample];
       }
     });
+    */
 
-    //console.log('outputData',outputData);
+    result.forEach((input) => {
+      const inputData = input.pcm;
+      //console.log('inputputData',inputData)
+      // Loop through the 4096 samples
+      for (var sample = 0; sample < outputBuffer.length; sample++) {
+        // make output equal to the same as the input
+        outputData[sample] = inputData[sample];
+      }
+    });
+
+    console.log("outputData", outputData);
     //console.log(inputData && inputData.sum())
   }
 }

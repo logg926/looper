@@ -28,3 +28,19 @@ Click `Show` in the header to see your app live. Updates to your code will insta
 Find out more [about Glitch](https://glitch.com/about).
 
 ( ᵔ ᴥ ᵔ )
+
+
+PCMPacket
+
+data = {
+      type: "clientPCMPacket",
+      PCMPacket: packetCollector
+    };
+
+    packetCollector = [PCMPacket]
+
+    PCMPacket = {
+      correspondingSecond: startSecond - scriptNodeStartingTime,
+      packageIndex: index,
+      pcm: array,
+    };
