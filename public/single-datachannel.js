@@ -1,12 +1,17 @@
 "use strict";
 import "https://webrtc.github.io/adapter/adapter-latest.js";
-import { PCMbufferSize } from "./constants.js";
-import { processAudioFromPCMFactory, pushPCMbuffer } from "./sync-new.js";
+import { PCMbufferSize, clientSendBufferLength } from "./constants.js";
+import {
+  processAudioFromPCMFactory,
+  pushPCMbuffer,
+  createNode,
+} from "./sync-new.js";
 import { processAudioToPCMFactory } from "./sync-client.js";
 
 var audioContext; // for Web Audio API
 var sampleRate;
 
+const clientAmount = 2;
 document.addEventListener("DOMContentLoaded", initDocument);
 
 // We start by associating the event handlers to the frontend.
@@ -28,6 +33,7 @@ async function startStream() {
 
   audioContext = new AudioContext({ sampleRate });
   await audioContext.audioWorklet.addModule("client-processor.js");
+  await audioContext.audioWorklet.addModule("server-processor.js");
   const createMultipleScriptProcessors = (clientAmount) => {
     const scriptProcessors = [];
     for (var i = 0; i < clientAmount; i++) {
@@ -77,24 +83,24 @@ async function startStream() {
     scriptProcessors[1].connect(audioContext.destination);
   }
 
+  scriptProcessorEnd = startServer();
   const serverSendStartMock = (event) => {
-    status.serverStarted = true;
+    // status.serverStarted = true;
+    scriptProcessorEnd.port.postMessage({ start: true });
     onServerStartCallBack();
   };
   document.getElementById("play").onclick = serverSendStartMock;
-
-  startServer();
 }
-
+let scriptProcessorEnd;
 let packetCollector = [];
 function sendPCMToServer(PCMPacket) {
   packetCollector.push(PCMPacket);
-  if (packetCollector.length > 9) {
+  if (packetCollector.length >= clientSendBufferLength) {
     const data = {
       type: "clientPCMPacket",
       PCMPacket: packetCollector,
     };
-    console.log("send", data);
+    // console.log("send", data);
 
     mockDataConnectionSend(data);
     //remove everything https://www.tutorialspoint.com/in-javascript-how-to-empty-an-array
@@ -105,12 +111,12 @@ function sendPCMToServer(PCMPacket) {
 let packetCollector2 = [];
 function sendPCMToServer2(PCMPacket) {
   packetCollector2.push(PCMPacket);
-  if (packetCollector2.length > 9) {
+  if (packetCollector2.length > clientSendBufferLength) {
     const data = {
       type: "clientPCMPacket",
       PCMPacket: packetCollector2,
     };
-    console.log("send", data);
+    // console.log("send2", data);
 
     mockDataConnectionSend(data);
     //remove everything https://www.tutorialspoint.com/in-javascript-how-to-empty-an-array
@@ -121,7 +127,6 @@ function sendPCMToServer2(PCMPacket) {
 let PCMbuffer = [];
 let scriptNodeIndex;
 
-const clientAmount = 2;
 const status = { serverStarted: null };
 
 function stopStream() {
@@ -138,16 +143,16 @@ async function loadAudioBuffer(url) {
 }
 
 function mockDataConnectionSend(data) {
-  console.log(data);
+  // console.log("mocksend", data);
   data.PCMPacket.forEach((PCMPacket) => {
     // const buffer = PCMPacket.pcm;
     // const pcm = new Float32Array(buffer);
     const pcm = PCMPacket.pcm;
-    gotRemotePCMPacket({ ...PCMPacket, pcm }, PCMbuffer);
+    gotRemotePCMPacket({ ...PCMPacket, pcm });
   });
 }
 
-async function startServer() {
+function startServer() {
   var loopLength, loopBeats, tempo, metronomeGain;
 
   // Update UI
@@ -157,20 +162,19 @@ async function startServer() {
   console.log("Creating Web Audio.");
   // audioContext = new AudioContext({ sampleRate });
 
-  const scriptProcessorEnd = audioContext.createScriptProcessor(
-    PCMbufferSize,
-    1,
-    1
-  );
-  scriptProcessorEnd.onaudioprocess = processAudioFromPCMFactory(
-    PCMbuffer,
-    scriptNodeIndex,
-    status
-  );
+  const scriptProcessorEnd = createNode(audioContext, clientAmount);
+  // scriptProcessorEnd.onaudioprocess = processAudioFromPCMFactory(
+  //   PCMbuffer,
+  //   scriptNodeIndex,
+  //   status
+  // );
   scriptProcessorEnd.connect(audioContext.destination);
+  return scriptProcessorEnd;
 }
 
-function gotRemotePCMPacket(PCMPacket, PCMbuffer) {
+function gotRemotePCMPacket(PCMPacket) {
   // console.log(PCMPacket);
-  pushPCMbuffer(PCMPacket, PCMbuffer, clientAmount);
+
+  scriptProcessorEnd.port.postMessage(PCMPacket);
+  // pushPCMbuffer(PCMPacket, PCMbuffer, clientAmount);
 }

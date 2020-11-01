@@ -40,7 +40,6 @@ data = {
     packetCollector = [PCMPacket]
 
     PCMPacket = {
-      correspondingSecond: startSecond - scriptNodeStartingTime,
       packageIndex: index,
       pcm: array,
     };

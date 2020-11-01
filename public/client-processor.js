@@ -19,7 +19,7 @@ class ClientProcessor extends AudioWorkletProcessor {
       pcm,
     };
     this.port.postMessage(outputsample);
-
+    this.index += 1;
     return true;
   }
 }

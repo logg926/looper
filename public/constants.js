@@ -6,4 +6,5 @@ export const skynetApiKey = "7e326bf9-2bca-411a-896d-670ba36cea21";
 export const PCMbufferSize = 128;
 // export const PCMbufferSize = 16384;
 export const MasterDelay = 10;
-export const masterDelayBufferAmount = 300;
+export const masterDelayBufferAmount = 3840;
+export const clientSendBufferLength = 1280;

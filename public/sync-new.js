@@ -23,10 +23,15 @@ export function pushPCMbuffer(PCMPacket, PCMbuffer, clientAmount) {
 
   return PCMbuffer;
 }
-
-// function initScriptNodeIndex() {
-//   return undefined;
-// }
+export function createNode(audioContext, clientAmount) {
+  // return audioContext.createScriptProcessor(PCMbufferSize, 1, 1);
+  return new AudioWorkletNode(audioContext, "server-processor", {
+    processorOptions: {
+      masterDelayBufferAmount,
+      clientAmount,
+    },
+  });
+}
 
 export function processAudioFromPCMFactory(PCMbuffer, scriptNodeIndex, status) {
   const processAudioFromPCM = (event) => {
