@@ -3,7 +3,6 @@ import "https://webrtc.github.io/adapter/adapter-latest.js";
 import { PCMbufferSize, clientSendBufferLength } from "./constants.js";
 import {
   processAudioFromPCMFactory,
-  pushPCMbuffer,
   createNode,
 } from "./sync-new.js";
 import { processAudioToPCMFactory } from "./sync-client.js";
@@ -39,26 +38,24 @@ async function startStream() {
     for (var i = 0; i < clientAmount; i++) {
       scriptProcessors.push(
         new AudioWorkletNode(audioContext, "client-processor")
-        // audioContext.createScriptProcessor(PCMbufferSize, 1, 1)
       );
     }
     return scriptProcessors;
   };
-  // const scriptProcessors = createMultipleScriptProcessors(clientAmount);
-  const scriptNodeStatus1 = {};
-  const scriptNodeStatus2 = {};
-  // scriptProcessors[0].onaudioprocess = processAudioToPCMFactory(
-  //   sendPCMToServer,
-  //   scriptNodeStatus1
-  // );
-  // scriptProcessors[1].onaudioprocess = processAudioToPCMFactory(
-  //   sendPCMToServer2,
-  //   scriptNodeStatus2
-  // );
 
   const songBuffer = await loadAudioBuffer(
     "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2Fsong.wav"
   );
+  const userInputStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      channelCount: 1
+    }
+  });
+    const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
+    mediaStream: userInputStream
+  });
 
   function onServerStartCallBack() {
     const scriptProcessors = createMultipleScriptProcessors(clientAmount);
@@ -72,17 +69,46 @@ async function startStream() {
     scriptProcessors[1].port.onmessage = (event) => {
       sendPCMToServer2(event.data);
     };
-    playNode.connect(scriptProcessors[0]);
+    
+    // playNode.connect(scriptProcessors[0]);
 
+    userInputNode.connect(scriptProcessors[0]);
+    playNode.connect(audioContext.destination)
     playNode.connect(scriptProcessors[1]);
-    playNode.loop = true;
+    // playNode.loop = true;
     playNode.start();
     // work around it output nothing
 
     scriptProcessors[0].connect(audioContext.destination);
     scriptProcessors[1].connect(audioContext.destination);
+    
+    setInterval(function () {
+      const length = packetCollector.length;
+      if(length){
+      const data = {
+        type: "clientPCMPacket",
+        PCMPacket: packetCollector.splice(0, length),
+      };
+      mockDataConnectionSend(data);
+        
+      }
+    }, 1000);
+    setInterval(function () {
+      const length = packetCollector2.length;
+      if(length){
+      const data = {
+        type: "clientPCMPacket",
+        PCMPacket: packetCollector2.splice(0, length),
+      };
+      mockDataConnectionSend(data);
+        
+      }
+    }, 1000);
+    
   }
 
+  
+  
   scriptProcessorEnd = startServer();
   const serverSendStartMock = (event) => {
     // status.serverStarted = true;
@@ -95,33 +121,11 @@ let scriptProcessorEnd;
 let packetCollector = [];
 function sendPCMToServer(PCMPacket) {
   packetCollector.push(PCMPacket);
-  if (packetCollector.length >= clientSendBufferLength) {
-    const data = {
-      type: "clientPCMPacket",
-      PCMPacket: packetCollector,
-    };
-    // console.log("send", data);
-
-    mockDataConnectionSend(data);
-    //remove everything https://www.tutorialspoint.com/in-javascript-how-to-empty-an-array
-    packetCollector = [];
-  }
 }
 
 let packetCollector2 = [];
 function sendPCMToServer2(PCMPacket) {
   packetCollector2.push(PCMPacket);
-  if (packetCollector2.length > clientSendBufferLength) {
-    const data = {
-      type: "clientPCMPacket",
-      PCMPacket: packetCollector2,
-    };
-    // console.log("send2", data);
-
-    mockDataConnectionSend(data);
-    //remove everything https://www.tutorialspoint.com/in-javascript-how-to-empty-an-array
-    packetCollector2 = [];
-  }
 }
 //
 let PCMbuffer = [];
@@ -143,7 +147,7 @@ async function loadAudioBuffer(url) {
 }
 
 function mockDataConnectionSend(data) {
-  // console.log("mocksend", data);
+  //console.log("mocksend", data);
   data.PCMPacket.forEach((PCMPacket) => {
     // const buffer = PCMPacket.pcm;
     // const pcm = new Float32Array(buffer);
@@ -176,5 +180,4 @@ function gotRemotePCMPacket(PCMPacket) {
   // console.log(PCMPacket);
 
   scriptProcessorEnd.port.postMessage(PCMPacket);
-  // pushPCMbuffer(PCMPacket, PCMbuffer, clientAmount);
 }

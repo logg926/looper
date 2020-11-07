@@ -1,40 +1,20 @@
 import {
   PCMbufferSize,
   MasterDelay,
-  masterDelayBufferAmount,
+  masterDelayBufferAmount
 } from "./constants.js";
 
-// export let PCMbuffer = [];
-
-export function pushPCMbuffer(PCMPacket, PCMbuffer, clientAmount) {
-  const avgPCM = PCMPacket.pcm.map((val) => {
-    return val / clientAmount;
-  });
-  if (!PCMbuffer[PCMPacket.packageIndex]) {
-    PCMbuffer[PCMPacket.packageIndex] = { ...PCMPacket, avgPCM };
-  } else {
-    //summing averaged buffer
-    PCMbuffer[PCMPacket.packageIndex].pcm = PCMbuffer[
-      PCMPacket.packageIndex
-    ].pcm.map((num, idx) => {
-      return num + avgPCM[idx];
-    });
-  }
-
-  return PCMbuffer;
-}
 export function createNode(audioContext, clientAmount) {
-  // return audioContext.createScriptProcessor(PCMbufferSize, 1, 1);
   return new AudioWorkletNode(audioContext, "server-processor", {
     processorOptions: {
       masterDelayBufferAmount,
-      clientAmount,
-    },
+      clientAmount
+    }
   });
 }
 
 export function processAudioFromPCMFactory(PCMbuffer, scriptNodeIndex, status) {
-  const processAudioFromPCM = (event) => {
+  const processAudioFromPCM = event => {
     const bufferDuration = event.inputBuffer.duration;
     const delayBufferAmount = masterDelayBufferAmount;
     let outputBuffer = event.outputBuffer;

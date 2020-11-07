@@ -12,8 +12,8 @@ class ServerProcessor extends AudioWorkletProcessor {
     this.clientAmount = options.processorOptions.clientAmount;
     this.status = {};
     this.PCMbuffer = [];
-    this.port.onmessage = (event) => {
-      //   console.log(event.data);
+    this.port.onmessage = event => {
+      //console.log('receive',event.data);
       // Handling data from the node.
       if (event.data.start) {
         this.status.serverStarted = true;
@@ -26,11 +26,11 @@ class ServerProcessor extends AudioWorkletProcessor {
   }
 
   pushPCMbuffer(PCMPacket, PCMbuffer, clientAmount) {
-    const avgPCM = PCMPacket.pcm.map((val) => {
+    const avgPCM = PCMPacket.pcm.map(val => {
       return val / clientAmount;
     });
     if (!PCMbuffer[PCMPacket.packageIndex]) {
-      PCMbuffer[PCMPacket.packageIndex] = { ...PCMPacket, avgPCM };
+      PCMbuffer[PCMPacket.packageIndex] = { ...PCMPacket, pcm: avgPCM };
     } else {
       //summing averaged buffer
       PCMbuffer[PCMPacket.packageIndex].pcm = PCMbuffer[
@@ -63,6 +63,7 @@ class ServerProcessor extends AudioWorkletProcessor {
           // make output equal to the same as the input
           outputData[sample] = bufferToPlay.pcm[sample];
         }
+        console.log(playingIndex, bufferToPlay);
       } else {
         for (var sample = 0; sample < outputData.length; sample++) {
           // make output equal to the same as the input
@@ -70,9 +71,10 @@ class ServerProcessor extends AudioWorkletProcessor {
         }
       }
 
-      this.PCMbuffer[playingIndex] = null;
+      this.PCMbuffer[playingIndex] = undefined;
     }
-    // console.log(outputData);
+    //  if (this.status.serverStarted === true) console.log('output',outputData);
+
     this.scriptNodeIndex += 1;
     return true;
   }

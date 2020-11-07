@@ -13,6 +13,9 @@ class ClientProcessor extends AudioWorkletProcessor {
     if (!this.index) {
       this.index = 0;
     }
+    if (!array) {
+      return true;
+    }
     const pcm = [...array];
     const outputsample = {
       packageIndex: this.index,

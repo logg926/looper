@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>Looper - Latency Detector</title>
+    <script type="module" src="crosscorrelation.js"></script>
+  </head>
+
+  <body>
+    <h1>Looper - Latency Detector</h1>
+    <p>
+      Sample rate:
+      <select id="sampleRate">
+        <option value="44100" selected>44100 Hz</option>
+        <option value="48000">48000 Hz</option>
+      </select>
+    </p>
+    <p>
+      <button id="startButton">Start</button>
+      <span id="outputSpan"></span>
+    </p>
+  </body>
+</html>

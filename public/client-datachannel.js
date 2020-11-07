@@ -1,6 +1,10 @@
 "use strict";
 import "https://webrtc.github.io/adapter/adapter-latest.js";
-import { skynetApiKey, PCMbufferSize } from "./constants.js";
+import {
+  skynetApiKey,
+  PCMbufferSize,
+  clientSendBufferLength
+} from "./constants.js";
 import { processAudioToPCMFactory } from "./sync-client.js";
 var audioContext; // for Web Audio API
 var sampleRate;
@@ -36,53 +40,57 @@ async function startStream() {
     audio: {
       echoCancellation: false,
       noiseSuppression: false,
-      channelCount: 1,
-    },
+      channelCount: 1
+    }
   });
 
   // Create Web Audio
   audioContext = new AudioContext({ sampleRate });
 
+  await audioContext.audioWorklet.addModule("client-processor.js");
   // clickBuffer = await loadAudioBuffer("snd/Closed_Hat.wav");
   const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
-    mediaStream: userInputStream,
+    mediaStream: userInputStream
   });
-
-  const scriptProcessor = audioContext.createScriptProcessor(
-    PCMbufferSize,
-    1,
-    1
-  );
-  //const scriptProcessorEnd = audioContext.createScriptProcessor(PCMbufferSize, 1, 1);
-  //scriptProcessorEnd.onaudioprocess = processAudioFromPCM;
-
-  const channelMergerNode = audioContext.createChannelMerger(3);
-
-  // scriptProcessorEnd.connect(channelMergerNode,0,0);
-
-  //scriptProcessorEnd.connect(audioContext.destination);
-
-  //userInputNode.connect(scriptProcessor);
-  // work around it output nothing
-  //scriptProcessor.connect(audioContext.destination);
 
   const songBuffer = await loadAudioBuffer(
     "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2Fsong.wav"
   );
 
   function onServerStartCallBack(dataConnection) {
+    // dataConnection.send("hi")
+    const scriptProcessor = new AudioWorkletNode(
+      audioContext,
+      "client-processor"
+    );
+
+    //     userInputNode.connect(scriptProcessor);
     const playNode = new AudioBufferSourceNode(audioContext, {
-      buffer: songBuffer,
+      buffer: songBuffer
     });
     playNode.connect(scriptProcessor);
     playNode.loop = true;
     playNode.start();
-    const nodeStatus = {};
-    scriptProcessor.onaudioprocess = processAudioToPCMFactory(
-      sendPCMToServerFactory(dataConnection),
-      nodeStatus
-    );
+    // const nodeStatus = {};
 
+    scriptProcessor.port.onmessage = event => {
+      bufferPCMandSendToServer(event.data, dataConnection, packetBuffer);
+    };
+    // scriptProcessor.onaudioprocess = processAudioToPCMFactory(
+    //   sendPCMToServerFactory(dataConnection),
+    //   nodeStatus
+    // );
+    setInterval(function() {
+      const length = packetBuffer.length;
+      if (length) {
+        const data = {
+          type: "clientPCMPacket",
+          PCMPacket: packetBuffer.splice(0, length)
+        };
+        console.log("send", data);
+        dataConnection.send(data);
+      }
+    }, 1000);
     // userInputNode.connect(scriptProcessor);
     // work around it output nothing
     scriptProcessor.connect(audioContext.destination);
@@ -93,27 +101,39 @@ async function startStream() {
 
   // document.getElementById("play").onclick = onServerStartCallBack;
 }
-// let globalDataConnection;
 
-let packetCollector = [];
+let packetBuffer = [];
+async function bufferPCMandSendToServer(
+  PCMPacket,
+  dataConnection,
+  packetBuffer
+) {
+  packetBuffer.push(PCMPacket);
+}
 
-const sendPCMToServerFactory = (dataConnection) => {
-  const sendPCMToServer = (PCMPacket) => {
-    packetCollector.push(PCMPacket);
-    if (packetCollector.length > 9) {
-      const data = {
-        type: "clientPCMPacket",
-        PCMPacket: packetCollector,
-      };
-      console.log("send", data);
-      //this takes too long
-      dataConnection.send(data);
-      //remove everything https://www.tutorialspoint.com/in-javascript-how-to-empty-an-array
-      packetCollector = [];
-    }
-  };
-  return sendPCMToServer;
+const sendData = (dataConnection, data) => {
+  return new Promise(resolve => {
+    resolve(dataConnection.send(data));
+  });
 };
+
+// const sendPCMToServerFactory = (dataConnection) => {
+//   const sendPCMToServer = (PCMPacket) => {
+//     packetCollector.push(PCMPacket);
+//     if (packetCollector.length > 9) {
+//       const data = {
+//         type: "clientPCMPacket",
+//         PCMPacket: packetCollector,
+//       };
+//       console.log("send", data);
+//       //this takes too long
+//       dataConnection.send(data);
+//       //remove everything https://www.tutorialspoint.com/in-javascript-how-to-empty-an-array
+//       packetCollector = [];
+//     }
+//   };
+//   return sendPCMToServer;
+// };
 
 // function sendPCMToServer(PCMPacket) {
 //   packetCollector.push(PCMPacket);
@@ -135,23 +155,23 @@ let scriptEndNodeStartingTime;
 async function sendAndRecieveFromServerSkynet(onServerStartCallBack) {
   const peer = new Peer({
     key: skynetApiKey,
-    debug: 3,
+    debug: 3
   });
   peer.on("open", () => {
     console.log("sky net: open ");
     document.getElementById("my-id").textContent = peer.id;
   });
 
-  peer.on("connection", (dataConnection) => {
+  peer.on("connection", dataConnection => {
     console.log("established datachannel :", dataConnection);
     dataConnection.on("open", () => {
       const data = {
         name: "SkyWay client",
-        msg: "Hello, World!",
+        msg: "Hello, World!"
       };
       dataConnection.send(data);
     });
-    dataConnection.on("data", (data) => {
+    dataConnection.on("data", data => {
       //console.log("data", data);
       if (data.type == "serverCommand") {
         if (data.msg == "start") {
@@ -161,7 +181,7 @@ async function sendAndRecieveFromServerSkynet(onServerStartCallBack) {
       }
     });
   });
-  peer.on("error", (err) => {
+  peer.on("error", err => {
     alert(err.message);
   });
 }
