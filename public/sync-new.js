@@ -4,7 +4,7 @@ import {
   masterDelayBufferAmount
 } from "./constants.js";
 
-export function createNode(audioContext, clientAmount) {
+export function createServerProcessorNode(audioContext, clientAmount) {
   return new AudioWorkletNode(audioContext, "server-processor", {
     processorOptions: {
       masterDelayBufferAmount,

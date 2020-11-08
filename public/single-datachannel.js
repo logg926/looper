@@ -3,7 +3,7 @@ import "https://webrtc.github.io/adapter/adapter-latest.js";
 import { PCMbufferSize, clientSendBufferLength } from "./constants.js";
 import {
   processAudioFromPCMFactory,
-  createNode,
+  createServerProcessorNode,
 } from "./sync-new.js";
 import { processAudioToPCMFactory } from "./sync-client.js";
 
@@ -46,76 +46,92 @@ async function startStream() {
   const songBuffer = await loadAudioBuffer(
     "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2Fsong.wav"
   );
+  const songBuffer2 = await loadAudioBuffer(
+    "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2Fsong2.wav"
+  );
   const userInputStream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: false,
       noiseSuppression: false,
-      channelCount: 1
-    }
+      channelCount: 1,
+    },
   });
-    const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
-    mediaStream: userInputStream
+  const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
+    mediaStream: userInputStream,
   });
 
+  const scriptProcessors = createMultipleScriptProcessors(clientAmount);
+  scriptProcessors[0].port.onmessage = (event) => {
+    sendPCMToServer(event.data);
+  };
+  scriptProcessors[1].port.onmessage = (event) => {
+    sendPCMToServer2(event.data);
+  };
+
+  scriptProcessors[0].connect(audioContext.destination);
+  scriptProcessors[1].connect(audioContext.destination);
+  let refreshIntervalId1, refreshIntervalId2;
+  let playNode, playNode2;
   function onServerStartCallBack() {
-    const scriptProcessors = createMultipleScriptProcessors(clientAmount);
-    const playNode = new AudioBufferSourceNode(audioContext, {
+    playNode = new AudioBufferSourceNode(audioContext, {
       buffer: songBuffer,
     });
-
-    scriptProcessors[0].port.onmessage = (event) => {
-      sendPCMToServer(event.data);
-    };
-    scriptProcessors[1].port.onmessage = (event) => {
-      sendPCMToServer2(event.data);
-    };
-    
-    // playNode.connect(scriptProcessors[0]);
-
-    userInputNode.connect(scriptProcessors[0]);
-    playNode.connect(audioContext.destination)
-    playNode.connect(scriptProcessors[1]);
+    playNode2 = new AudioBufferSourceNode(audioContext, {
+      buffer: songBuffer2,
+    });
+    playNode.connect(scriptProcessors[0]);
+    // userInputNode.connect(scriptProcessors[0]);
+    // playNode.connect(audioContext.destination)
+    playNode2.connect(scriptProcessors[1]);
     // playNode.loop = true;
     playNode.start();
+playNode2.start()
+    // playNode.onended = () => {
+    //   scriptProcessors.map((scriptProcessor) => {
+    //     scriptProcessor.port.postMessage({ stop: true });
+    //   });
+    // };
+    scriptProcessors.map((scriptProcessor) => {
+      scriptProcessor.port.postMessage({ start: true });
+    });
     // work around it output nothing
-
-    scriptProcessors[0].connect(audioContext.destination);
-    scriptProcessors[1].connect(audioContext.destination);
-    
-    setInterval(function () {
+    refreshIntervalId1 = setInterval(function () {
       const length = packetCollector.length;
-      if(length){
-      const data = {
-        type: "clientPCMPacket",
-        PCMPacket: packetCollector.splice(0, length),
-      };
-      mockDataConnectionSend(data);
-        
+      if (length) {
+        const data = {
+          type: "clientPCMPacket",
+          PCMPacket: packetCollector.splice(0, length),
+        };
+        mockDataConnectionSend(data);
       }
     }, 1000);
-    setInterval(function () {
+    refreshIntervalId2 = setInterval(function () {
       const length = packetCollector2.length;
-      if(length){
-      const data = {
-        type: "clientPCMPacket",
-        PCMPacket: packetCollector2.splice(0, length),
-      };
-      mockDataConnectionSend(data);
-        
+      if (length) {
+        const data = {
+          type: "clientPCMPacket",
+          PCMPacket: packetCollector2.splice(0, length),
+        };
+        mockDataConnectionSend(data);
       }
     }, 1000);
-    
   }
 
-  
-  
-  scriptProcessorEnd = startServer();
-  const serverSendStartMock = (event) => {
-    // status.serverStarted = true;
-    scriptProcessorEnd.port.postMessage({ start: true });
-    onServerStartCallBack();
-  };
-  document.getElementById("play").onclick = serverSendStartMock;
+  function onServerStopCallBack() {
+    scriptProcessors.map((scriptProcessor) => {
+      scriptProcessor.port.postMessage({ stop: true });
+    });
+    playNode.stop();
+    playNode.disconnect();
+    playNode2.stop()
+    playNode2.disconnect()
+    clearInterval(refreshIntervalId1);
+    clearInterval(refreshIntervalId2);
+    packetCollector.length = 0;
+    packetCollector2.length = 0;
+  }
+
+  scriptProcessorEnd = startServer(onServerStartCallBack, onServerStopCallBack);
 }
 let scriptProcessorEnd;
 let packetCollector = [];
@@ -156,7 +172,7 @@ function mockDataConnectionSend(data) {
   });
 }
 
-function startServer() {
+function startServer(onServerStartCallBack, onServerStopCallBack) {
   var loopLength, loopBeats, tempo, metronomeGain;
 
   // Update UI
@@ -166,13 +182,28 @@ function startServer() {
   console.log("Creating Web Audio.");
   // audioContext = new AudioContext({ sampleRate });
 
-  const scriptProcessorEnd = createNode(audioContext, clientAmount);
-  // scriptProcessorEnd.onaudioprocess = processAudioFromPCMFactory(
-  //   PCMbuffer,
-  //   scriptNodeIndex,
-  //   status
-  // );
+  const scriptProcessorEnd = createServerProcessorNode(
+    audioContext,
+    clientAmount
+  );
+
   scriptProcessorEnd.connect(audioContext.destination);
+
+  const serverSendStartMock = (event) => {
+    // status.serverStarted = true;
+    scriptProcessorEnd.port.postMessage({ start: true });
+    onServerStartCallBack();
+  };
+
+  const serverSendStopMock = (event) => {
+    // status.serverStarted = true;
+    scriptProcessorEnd.port.postMessage({ stop: true });
+    onServerStopCallBack();
+  };
+
+  document.getElementById("play").onclick = serverSendStartMock;
+
+  document.getElementById("stop").onclick = serverSendStopMock;
   return scriptProcessorEnd;
 }
 

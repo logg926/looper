@@ -2,7 +2,7 @@
 
 import Metronome from "./metronome.js";
 import Correlator from "./correlator.js";
-import {PCMbufferSize} from "./constant.js"
+import {PCMbufferSize} from "./constants.js"
 
 var audioContext, sampleRate; // for Web Audio API
 

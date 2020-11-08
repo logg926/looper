@@ -17,6 +17,10 @@ class ServerProcessor extends AudioWorkletProcessor {
       // Handling data from the node.
       if (event.data.start) {
         this.status.serverStarted = true;
+      } else if (event.data.stop) {
+        this.status.serverStarted = false;
+        this.scriptNodeIndex = undefined;
+        // when restart it will start from 0
       } else {
         const PCMPacket = event.data;
         this.pushPCMbuffer(PCMPacket, this.PCMbuffer, this.clientAmount);
