@@ -36,36 +36,37 @@ async function startStream() {
   // sessionId = document.getElementById("sessionId").value;
 
   // Getting user media
-  // const userInputStream = await navigator.mediaDevices.getUserMedia({
-  //   audio: {
-  //     echoCancellation: false,
-  //     noiseSuppression: false,
-  //     channelCount: 1,
-  //   },
-  // });
+  const userInputStream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      channelCount: 1,
+    },
+  });
 
   // Create Web Audio
   audioContext = new AudioContext({ sampleRate });
 
   await audioContext.audioWorklet.addModule("client-processor.js");
   // clickBuffer = await loadAudioBuffer("snd/Closed_Hat.wav");
-  // const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
-  //   mediaStream: userInputStream,
-  // });
+  const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
+    mediaStream: userInputStream,
+  });
 
-  let songBuffer = await loadAudioBuffer(
+  const songBuffer = await loadAudioBuffer(
     "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2Fsong.wav"
   );
   
-  if (document.getElementById("link").value ){
-    songBuffer = await loadAudioBuffer(
-    document.getElementById("link").value 
-  );
-  }
+  const userDelayInBufferUnit = document.getElementById("latency").value;
 
   const scriptProcessor = new AudioWorkletNode(
     audioContext,
-    "client-processor"
+    "client-processor",
+    {
+    processorOptions: {
+      userDelayInBufferUnit,
+    }
+  }
   );
 
   // work around it output nothing
@@ -76,9 +77,10 @@ async function startStream() {
     playNode = new AudioBufferSourceNode(audioContext, {
       buffer: songBuffer,
     });
-    playNode.connect(scriptProcessor);
+    // playNode.connect(scriptProcessor);
     playNode.loop = true;
     playNode.start();
+    playNode.connect(audioContext.destination)
     // const nodeStatus = {};
     scriptProcessor.port.postMessage({ start: true });
 
@@ -96,7 +98,7 @@ async function startStream() {
         dataConnection.send(data);
       }
     }, 1000);
-    // userInputNode.connect(scriptProcessor);
+    userInputNode.connect(scriptProcessor);
   }
 
   function onServerStopCallBack() {

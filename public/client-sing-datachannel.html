@@ -3,18 +3,16 @@
 
 <head>
   <meta charset="utf-8" />
-  <title>Looper - Session Manager</title>
+  <title>Looper - Client</title>
   <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-  <script type="module" src="streamserver-datachannel.js"></script>
+  <script type="module" src="client-sing-datachannel.js"></script>
 </head>
 
 <body>
-  <h1>Looper - Session Manager</h1>
-  <p>
-    The following parameters must be also entered at each client exactly
-    the same way:
-  </p>
+  <h1>Looper - Client</h1>
+  <p>Session ID: <input id="sessionId" /></p>
+  <p>Latency: <input id="latency" /> ms</p>
   <p>
     Sample rate:
     <select id="sampleRate">
@@ -66,42 +64,25 @@
   </p>
   <p>
     Loop lenght:
-    <input type="number" id=loopBeats value="4" />
+    <input type="number" id="loopBeats" value="4" />
     beats.
   </p>
   <p>
-    The following parameters only need to be set on session level:
+    <button id="startButton">Join</button>
+    <button id="stopButton" disabled>Leave</button>
+    <a id="downloadButton">Download</a>
   </p>
-  <p>
-    Decay factor: <input id="loopGain" value="0.9" />
-    Note to the sorcerer's apprentice: Don't pick values &gt;1.
-  </p>
-  <p>
-    Metronome volume: <input id="metronomeGain" value="0.5" />
-    (pick 0 - 1).
-  </p>
-  <p><button id="startServerButton">Start Session</button></p>
-  <p>Session ID: <span id="sessionId"></span></p>
-  <button id="play">play</button>
-  <button id="stop">stop</button>
   <div id="videos">
     <!-- <div id="subscriber"></div> -->
     <div id="publisher"></div>
 
     <div id="subscriber" #subscriber></div>
   </div>
-  <div>
-    skynet client call ID:
-    <textarea id="their-id"></textarea>
-  <button id="make-call">call</button>
-  <br></br>
-  skynet client call2 ID:
-    <textarea id="their-id2"></textarea>
-  <button id="make-call2">call2</button>
-  <br></br>
-  My id:
+  <div> skynet Call ID:
     <p id="my-id"></p>
   </div>
+
+  <button id="play">play</button>
 </body>
 
 </html>

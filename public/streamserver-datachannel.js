@@ -3,7 +3,7 @@
 import { skynetApiKey, PCMbufferSize } from "./constants.js";
 import "https://webrtc.github.io/adapter/adapter-latest.js";
 
-import { createNode } from "./sync-new.js";
+import { createServerProcessorNode } from "./sync-new.js";
 
 var audioContext, sampleRate;
 
@@ -29,23 +29,39 @@ async function startServer() {
   audioContext = new AudioContext({ sampleRate });
 
   await audioContext.audioWorklet.addModule("server-processor.js");
-  const scriptProcessorEnd = createNode(audioContext, clientAmount);
+  const scriptProcessorEnd = createServerProcessorNode(
+    audioContext,
+    clientAmount
+  );
   scriptProcessorEnd.connect(audioContext.destination);
   await sendAndRecievefromClientSkyway(gotRemotePCMPacket, scriptProcessorEnd);
-
-  document.getElementById("play").onclick = onclickstart;
 
   function onclickstart() {
     scriptProcessorEnd.port.postMessage({ start: true });
     const data = {
       type: "serverCommand",
-      msg: "start"
+      msg: "start",
     };
 
-    dataConnections.map(dataConnection => {
+    dataConnections.map((dataConnection) => {
       dataConnection.send(data);
     });
   }
+
+  function onclickstop() {
+    scriptProcessorEnd.port.postMessage({ stop: true });
+    const data = {
+      type: "serverCommand",
+      msg: "stop",
+    };
+
+    dataConnections.map((dataConnection) => {
+      dataConnection.send(data);
+    });
+  }
+  document.getElementById("play").onclick = onclickstart;
+
+  document.getElementById("stop").onclick = onclickstop;
 }
 
 const dataConnections = [];
@@ -55,7 +71,7 @@ async function sendAndRecievefromClientSkyway(
 ) {
   const peer = new Peer({
     key: skynetApiKey,
-    debug: 3
+    debug: 3,
   });
   console.log("sky net: new peer");
   peer.on("open", () => {
@@ -70,10 +86,10 @@ async function sendAndRecievefromClientSkyway(
       dataConnections.push(dataConnection);
     });
     // Receive data
-    dataConnection.on("data", data => {
+    dataConnection.on("data", (data) => {
       console.log("receive", data);
       if (data.type == "clientPCMPacket") {
-        data.PCMPacket.forEach(PCMPacket => {
+        data.PCMPacket.forEach((PCMPacket) => {
           const buffer = PCMPacket.pcm;
           const pcm = new Float32Array(buffer);
 
@@ -90,10 +106,10 @@ async function sendAndRecievefromClientSkyway(
       dataConnections.push(dataConnection);
     });
     // Receive data
-    dataConnection.on("data", data => {
+    dataConnection.on("data", (data) => {
       console.log("receive", data);
       if (data.type == "clientPCMPacket") {
-        data.PCMPacket.forEach(PCMPacket => {
+        data.PCMPacket.forEach((PCMPacket) => {
           const buffer = PCMPacket.pcm;
           const pcm = new Float32Array(buffer);
 
@@ -102,7 +118,7 @@ async function sendAndRecievefromClientSkyway(
       }
     });
   };
-  peer.on("error", err => {
+  peer.on("error", (err) => {
     alert(err.message);
   });
 }
