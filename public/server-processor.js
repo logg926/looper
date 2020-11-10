@@ -3,7 +3,7 @@
 // https://github.com/WebAudio/web-audio-api/issues/1503
 
 // https://developers.google.com/web/updates/2017/12/audio-worklet
-import { Mutex, MutexInterface } from "../server.js";
+import { Mutex } from "./mutex.js";
 
 class ServerProcessor extends AudioWorkletProcessor {
   constructor(options) {

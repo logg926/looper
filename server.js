@@ -4,8 +4,6 @@
 // we've started you off with Express (https://expressjs.com/)
 // but feel free to use whatever libraries or frameworks you'd like through `package.json`.
 const express = require("express");
-const   Mutex = require("async-mutex").Mutex;
-const   MutexInterface = require("async-mutex").MutexInterface;
 const app = express();
 
 // our default array of dreams

@@ -10,8 +10,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.17.1",
-    "async-mutex": "^0.2.4"
+    "express": "^4.17.1"
   },
   "engines": {
     "node": "12.x"
