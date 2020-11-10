@@ -3,7 +3,7 @@ import "https://webrtc.github.io/adapter/adapter-latest.js";
 import { PCMbufferSize, clientSendBufferLength } from "./constants.js";
 import {
   processAudioFromPCMFactory,
-  createServerProcessorNode,
+  createServerProcessorNode
 } from "./sync-new.js";
 import { processAudioToPCMFactory } from "./sync-client.js";
 
@@ -22,18 +22,17 @@ async function initDocument() {
 
 async function startStream() {
   // Disable UI
-  var tempo, loopLength;
+  var loopLength;
   document.getElementById("sessionId").disabled = true;
   document.getElementById("sampleRate").disabled = true;
   document.getElementById("loopBeats").disabled = true;
-  document.getElementById("tempo").disabled = true;
   document.getElementById("latency").disabled = true;
   document.getElementById("startButton").disabled = true;
 
   audioContext = new AudioContext({ sampleRate });
   await audioContext.audioWorklet.addModule("client-processor.js");
   await audioContext.audioWorklet.addModule("server-processor.js");
-  const createMultipleScriptProcessors = (clientAmount) => {
+  const createMultipleScriptProcessors = clientAmount => {
     const scriptProcessors = [];
     for (var i = 0; i < clientAmount; i++) {
       scriptProcessors.push(
@@ -53,18 +52,18 @@ async function startStream() {
     audio: {
       echoCancellation: false,
       noiseSuppression: false,
-      channelCount: 1,
-    },
+      channelCount: 1
+    }
   });
   const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
-    mediaStream: userInputStream,
+    mediaStream: userInputStream
   });
 
   const scriptProcessors = createMultipleScriptProcessors(clientAmount);
-  scriptProcessors[0].port.onmessage = (event) => {
+  scriptProcessors[0].port.onmessage = event => {
     sendPCMToServer(event.data);
   };
-  scriptProcessors[1].port.onmessage = (event) => {
+  scriptProcessors[1].port.onmessage = event => {
     sendPCMToServer2(event.data);
   };
 
@@ -74,10 +73,10 @@ async function startStream() {
   let playNode, playNode2;
   function onServerStartCallBack() {
     playNode = new AudioBufferSourceNode(audioContext, {
-      buffer: songBuffer,
+      buffer: songBuffer
     });
     playNode2 = new AudioBufferSourceNode(audioContext, {
-      buffer: songBuffer2,
+      buffer: songBuffer2
     });
     playNode.connect(scriptProcessors[0]);
     // userInputNode.connect(scriptProcessors[0]);
@@ -85,32 +84,32 @@ async function startStream() {
     playNode2.connect(scriptProcessors[1]);
     // playNode.loop = true;
     playNode.start();
-playNode2.start()
+    playNode2.start();
     // playNode.onended = () => {
     //   scriptProcessors.map((scriptProcessor) => {
     //     scriptProcessor.port.postMessage({ stop: true });
     //   });
     // };
-    scriptProcessors.map((scriptProcessor) => {
+    scriptProcessors.map(scriptProcessor => {
       scriptProcessor.port.postMessage({ start: true });
     });
     // work around it output nothing
-    refreshIntervalId1 = setInterval(function () {
+    refreshIntervalId1 = setInterval(function() {
       const length = packetCollector.length;
       if (length) {
         const data = {
           type: "clientPCMPacket",
-          PCMPacket: packetCollector.splice(0, length),
+          PCMPacket: packetCollector.splice(0, length)
         };
         mockDataConnectionSend(data);
       }
     }, 1000);
-    refreshIntervalId2 = setInterval(function () {
+    refreshIntervalId2 = setInterval(function() {
       const length = packetCollector2.length;
       if (length) {
         const data = {
           type: "clientPCMPacket",
-          PCMPacket: packetCollector2.splice(0, length),
+          PCMPacket: packetCollector2.splice(0, length)
         };
         mockDataConnectionSend(data);
       }
@@ -118,13 +117,13 @@ playNode2.start()
   }
 
   function onServerStopCallBack() {
-    scriptProcessors.map((scriptProcessor) => {
+    scriptProcessors.map(scriptProcessor => {
       scriptProcessor.port.postMessage({ stop: true });
     });
     playNode.stop();
     playNode.disconnect();
-    playNode2.stop()
-    playNode2.disconnect()
+    playNode2.stop();
+    playNode2.disconnect();
     clearInterval(refreshIntervalId1);
     clearInterval(refreshIntervalId2);
     packetCollector.length = 0;
@@ -164,7 +163,7 @@ async function loadAudioBuffer(url) {
 
 function mockDataConnectionSend(data) {
   //console.log("mocksend", data);
-  data.PCMPacket.forEach((PCMPacket) => {
+  data.PCMPacket.forEach(PCMPacket => {
     // const buffer = PCMPacket.pcm;
     // const pcm = new Float32Array(buffer);
     const pcm = PCMPacket.pcm;
@@ -173,7 +172,7 @@ function mockDataConnectionSend(data) {
 }
 
 function startServer(onServerStartCallBack, onServerStopCallBack) {
-  var loopLength, loopBeats, tempo, metronomeGain;
+  var loopLength, loopBeats, metronomeGain;
 
   // Update UI
   document.getElementById("sampleRate").disabled = true;
@@ -189,13 +188,13 @@ function startServer(onServerStartCallBack, onServerStopCallBack) {
 
   scriptProcessorEnd.connect(audioContext.destination);
 
-  const serverSendStartMock = (event) => {
+  const serverSendStartMock = event => {
     // status.serverStarted = true;
     scriptProcessorEnd.port.postMessage({ start: true });
     onServerStartCallBack();
   };
 
-  const serverSendStopMock = (event) => {
+  const serverSendStopMock = event => {
     // status.serverStarted = true;
     scriptProcessorEnd.port.postMessage({ stop: true });
     onServerStopCallBack();

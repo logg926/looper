@@ -44,7 +44,8 @@ class ClientProcessor extends AudioWorkletProcessor {
     const pcm = [...array];
     const outputsample = {
       packageIndex: this.index - this.userDelayInBufferUnit,
-      pcm
+      pcm,
+      count:1
     };
     this.port.postMessage(outputsample);
     this.index += 1;
