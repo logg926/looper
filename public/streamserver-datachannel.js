@@ -1,6 +1,6 @@
 "use strict";
 
-import { skynetApiKey, PCMbufferSize } from "./constants.js";
+import { skynetApiKey, PCMbufferSize , dataChannelOptions} from "./constants.js";
 import "https://webrtc.github.io/adapter/adapter-latest.js";
 
 import { createServerProcessorNode } from "./sync-new.js";
@@ -80,7 +80,7 @@ async function sendAndRecievefromClientSkyway(
   });
   document.getElementById("make-call").onclick = () => {
     const theirID = document.getElementById("their-id").value;
-    const dataConnection = peer.connect(theirID);
+    const dataConnection = peer.connect(theirID, dataChannelOptions);
     // Send data
     dataConnection.on("open", () => {
       dataConnections.push(dataConnection);
@@ -125,6 +125,6 @@ async function sendAndRecievefromClientSkyway(
 
 const clientAmount = 2;
 function gotRemotePCMPacket(PCMPacket, scriptProcessorEnd) {
-  console.log("PCMPacket", PCMPacket);
+  //console.log("PCMPacket", PCMPacket);
   scriptProcessorEnd.port.postMessage(PCMPacket);
 }

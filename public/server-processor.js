@@ -12,7 +12,7 @@ class ServerProcessor extends AudioWorkletProcessor {
       options.processorOptions.masterDelayBufferAmount;
     this.clientAmount = options.processorOptions.clientAmount;
     this.status = {};
-    this.PCMbuffer = [];
+    this.PCMbuffer = new Map();
     this.bufferLock = new Map();
     this.port.onmessage = event => {
       //console.log('receive',event.data);
@@ -27,7 +27,6 @@ class ServerProcessor extends AudioWorkletProcessor {
         const PCMPacket = event.data;
         this.pushPCMbuffer(PCMPacket, this.PCMbuffer, this.clientAmount);
       }
-      //   console.log(event.data);
     };
   }
 
@@ -45,13 +44,13 @@ class ServerProcessor extends AudioWorkletProcessor {
       .acquire()
       .then(async release => {
         try {
-          const existPCMPacket = PCMbuffer[PCMPacket.packageIndex];
+          const existPCMPacket = PCMbuffer.get(PCMPacket.packageIndex);
           if (!existPCMPacket) {
-            PCMbuffer[PCMPacket.packageIndex] = { ...PCMPacket, pcm: avgPCM };
+            PCMbuffer.set(PCMPacket.packageIndex, { ...PCMPacket, pcm: avgPCM });
           } else {
-            PCMbuffer[PCMPacket.packageIndex].pcm = PCMbuffer[
+            PCMbuffer.get(PCMPacket.packageIndex).pcm = PCMbuffer.get(
               PCMPacket.packageIndex
-            ].pcm.map((num, idx) => {
+            ).pcm.map((num, idx) => {
               return num + avgPCM[idx];
             });
           }
@@ -97,7 +96,7 @@ class ServerProcessor extends AudioWorkletProcessor {
       }
     }
     if (playingIndex >= 0) {
-      const bufferToPlay = this.PCMbuffer[playingIndex];
+      const bufferToPlay = this.PCMbuffer.get(playingIndex);
       // console.log(bufferToPlay);
       if (bufferToPlay) {
         for (var sample = 0; sample < outputData.length; sample++) {
@@ -112,8 +111,8 @@ class ServerProcessor extends AudioWorkletProcessor {
         }
       }
 
-      this.PCMbuffer[playingIndex] = undefined;
-      console.log("PCMbuffer length", this.PCMbuffer.length);
+      this.PCMbuffer.delete(playingIndex);
+      console.log("PCMbuffer length", this.PCMbuffer.size);
     }
     //  if (this.status.serverStarted === true) console.log('output',outputData);
 
