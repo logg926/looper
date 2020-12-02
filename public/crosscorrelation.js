@@ -2,7 +2,8 @@
 
 import Metronome from "./metronome.js";
 import Correlator from "./correlator.js";
-import {PCMbufferSize} from "./constants.js"
+import { PCMbufferSize } from "./constants.js";
+import { initMediaDevice } from "./helperFunctions.js";
 
 var audioContext, sampleRate; // for Web Audio API
 
@@ -12,6 +13,8 @@ document.addEventListener("DOMContentLoaded", initDocument);
 function initDocument() {
   console.log("Adding event handlers to DOM.");
   document.getElementById("startButton").onclick = start;
+  var selectBar = document.getElementById("audioSource");
+  initMediaDevice(selectBar);
 }
 
 const test = false;
@@ -31,7 +34,9 @@ async function start() {
   audioContext = new AudioContext({ sampleRate });
 
   // metronome and input node
-  clickBuffer = await loadAudioBuffer("https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2FClosed_Hat.wav?v=1604305149636");
+  clickBuffer = await loadAudioBuffer(
+    "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2FClosed_Hat.wav?v=1604305149636"
+  );
   clickBufferDuration = clickBuffer.duration;
   console.log("click buffer duration: %.1f ms.", 1000 * clickBufferDuration);
 
@@ -44,11 +49,13 @@ async function start() {
   } else {
     console.log("Working actual mode.");
 
+    var source = document.getElementById("audioSource").value;
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: false,
         noiseSuppression: false,
         channelCount: 1,
+        deviceId: source,
       },
     });
     inputNode = new MediaStreamAudioSourceNode(audioContext, { mediaStream });
@@ -74,7 +81,7 @@ function updateOutput(latency) {
     "Latency: %.2f ms = %.0f samples = %.0f chunk",
     1000 * latency,
     Math.round(latency * sampleRate),
-    Math.round(latency * sampleRate/PCMbufferSize)
+    Math.round((latency * sampleRate) / PCMbufferSize)
   );
 
   document.getElementById("outputSpan").innerHTML =

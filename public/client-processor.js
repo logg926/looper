@@ -3,9 +3,9 @@
 // https://github.com/WebAudio/web-audio-api/issues/1503
 
 // https://developers.google.com/web/updates/2017/12/audio-worklet
+
+import { compressPCM } from "./audioCompressor.js";
 class ClientProcessor extends AudioWorkletProcessor {
-  
-  
   constructor(options) {
     super();
     this.status = {};
@@ -42,12 +42,16 @@ class ClientProcessor extends AudioWorkletProcessor {
       return true;
     }
     const pcm = [...array];
-    const outputsample = {
-      packageIndex: this.index - this.userDelayInBufferUnit,
-      pcm,
-      count:1
-    };
-    this.port.postMessage(outputsample);
+    const packageIndex = this.index - this.userDelayInBufferUnit;
+    if (packageIndex >= 0) {
+      const outputsample = {
+        packageIndex,
+        pcm: compressPCM(pcm),
+        count: 1
+      };
+      this.port.postMessage(outputsample);
+    }
+
     this.index += 1;
     return true;
   }

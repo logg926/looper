@@ -1,94 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Looper - Client</title>
+    <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script type="module" src="client-datachannel.js"></script>
+  </head>
 
-<head>
-  <meta charset="utf-8" />
-  <title>Looper - Client</title>
-  <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-  <script type="module" src="client-datachannel.js"></script>
-</head>
+  <body>
+    <h1>Looper - Client</h1>
 
-<body>
-  <h1>Looper - Client</h1>
-  <p>Session ID: <input id="sessionId" /></p>
-  <p>Latency: <input id="latency" /> ms</p>
-  <p>
-    Sample rate:
-    <select id="sampleRate">
-      <option value="44100" selected>44100 Hz</option>
-      <option value="48000">48000 Hz</option>
-    </select>
-  </p>
-  <p>
-    Tempo:
-    <select id="tempo">
-      <option value="40">40 bpm</option>
-      <option value="42">42 bpm</option>
-      <option value="44">44 bpm</option>
-      <option value="46">46 bpm</option>
-      <option value="48">48 bpm</option>
-      <option value="50">50 bpm</option>
-      <option value="52">52 bpm</option>
-      <option value="54">54 bpm</option>
-      <option value="56">56 bpm</option>
-      <option value="58">58 bpm</option>
-      <option value="60">60 bpm</option>
-      <option value="63">63 bpm</option>
-      <option value="69">69 bpm</option>
-      <option value="72">72 bpm</option>
-      <option value="76">76 bpm</option>
-      <option value="80">80 bpm</option>
-      <option value="84">84 bpm</option>
-      <option value="88">88 bpm</option>
-      <option value="92">92 bpm</option>
-      <option value="96">96 bpm</option>
-      <option value="100">100 bpm</option>
-      <option value="104">104 bpm</option>
-      <option value="108">108 bpm</option>
-      <option value="112">112 bpm</option>
-      <option value="116">116 bpm</option>
-      <option value="120" selected>120 bpm</option>
-      <option value="126">126 bpm</option>
-      <option value="132">132 bpm</option>
-      <option value="138">138 bpm</option>
-      <option value="144">144 bpm</option>
-      <option value="152">152 bpm</option>
-      <option value="160">160 bpm</option>
-      <option value="168">168 bpm</option>
-      <option value="176">176 bpm</option>
-      <option value="184">184 bpm</option>
-      <option value="192">192 bpm</option>
-      <option value="208">208 bpm</option>
-    </select>
-  </p>
-  <p>
-    Loop lenght:
-    <input type="number" id="loopBeats" value="4" />
-    beats.
-  </p>
+    <video id="js-local-stream"></video>
+    <div class="remote-streams" id="js-remote-streams"></div>
+    <p>Latency: <input id="latency" type="number" value="0" /> ms</p>
+
     <p>
-    link:
-    <input type="text" id="link" />
-    
-  </p>
-  <p>
-    <button id="startButton">Join</button>
-    <button id="stopButton" disabled>Leave</button>
-    <a id="downloadButton">Download</a>
-  </p>
-  <div id="videos">
-    <!-- <div id="subscriber"></div> -->
-    <div id="publisher"></div>
+      <select id="audioSource"></select>
+    </p>
 
-    <div id="subscriber" #subscriber></div>
-  </div>
-  <div> skynet Call ID:
-    <p id="my-id"></p>
-  </div>
+    <p>Output as Song: <input id="testing" type="checkbox" /></p>
+    <p>
+      link:
+      <input
+        type="text"
+        id="link"
+        value="https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2FWhatsApp%20Audio%202020-11-29%20at%203.25.39%20PM.wav?v=1606634994964"
+      />
+    </p>
+    <p>
+      <button id="startButton">Join</button>
+      <button id="stopButton" disabled>Leave</button>
+      <a id="downloadButton">Download</a>
+    </p>
+    <div>
+      skynet Call ID:
+      <p id="my-id"></p>
+    </div>
 
-  <button id="play">play</button>
-  
-</body>
-
+    <button id="play">play</button>
+  </body>
 </html>

@@ -1,213 +1,179 @@
 "use strict";
 import "https://webrtc.github.io/adapter/adapter-latest.js";
-import { PCMbufferSize, clientSendBufferLength } from "./constants.js";
 import {
-  processAudioFromPCMFactory,
-  createServerProcessorNode
-} from "./sync-new.js";
-import { processAudioToPCMFactory } from "./sync-client.js";
+  passPCMPacketToServerProcessor,
+  startServerNode,
+  addParticipant,
+  changeGain,
+} from "./audioContext-server.js";
 
-var audioContext; // for Web Audio API
-var sampleRate;
+import { defaultSampleRate } from "./constants.js";
+import { startStream } from "./audioContext-client.js";
+import { msToIndex, initMediaDevice } from "./helperFunctions.js";
 
-const clientAmount = 2;
+//piano plus ppl
+const clientAmount = 3;
 document.addEventListener("DOMContentLoaded", initDocument);
 
 // We start by associating the event handlers to the frontend.
 async function initDocument() {
   // Adding event handlers to DOM
-  document.getElementById("startButton").onclick = startStream;
+  document.getElementById("startButton").onclick = startButton;
   document.getElementById("stopButton").onclick = stopStream;
+  var selectBar = document.getElementById("audioSource");
+  initMediaDevice(selectBar);
 }
 
-async function startStream() {
-  // Disable UI
-  var loopLength;
-  document.getElementById("sessionId").disabled = true;
-  document.getElementById("sampleRate").disabled = true;
-  document.getElementById("loopBeats").disabled = true;
+async function startButton() {
   document.getElementById("latency").disabled = true;
   document.getElementById("startButton").disabled = true;
+  var source = document.getElementById("audioSource").value;
+  const link =
+    "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2FWhatsApp%20Audio%202020-11-29%20at%203.25.39%20PM.wav?v=1606634994964";
 
-  audioContext = new AudioContext({ sampleRate });
-  await audioContext.audioWorklet.addModule("client-processor.js");
-  await audioContext.audioWorklet.addModule("server-processor.js");
-  const createMultipleScriptProcessors = clientAmount => {
-    const scriptProcessors = [];
-    for (var i = 0; i < clientAmount; i++) {
-      scriptProcessors.push(
-        new AudioWorkletNode(audioContext, "client-processor")
-      );
-    }
-    return scriptProcessors;
-  };
+  const latencyInMs = document.getElementById("latency").value;
 
-  const songBuffer = await loadAudioBuffer(
-    "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2Fsong.wav"
+  const userDelayInBufferUnit = msToIndex(latencyInMs, defaultSampleRate);
+
+  // const { onServerStartCallBack, onServerStopCallBack } = await startStream(
+  //   packetCollector,
+  //   link,
+  //   mockDataConnectionSend,
+  //   userDelayInBufferUnit,
+  //   false,
+  //   false,
+  //   source
+  // );
+
+  const {
+    onServerStartCallBack,
+    onServerStopCallBack,
+    changeAudioTrack,
+  } = await startStream(
+    packetCollector,
+    link,
+    mockDataConnectionSend1,
+    0,
+    true,
+    false,
+    source
   );
-  const songBuffer2 = await loadAudioBuffer(
-    "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2Fsong2.wav"
+  const link2 =
+    "https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2FWhatsApp%20Audio%202020-11-29%20at%203.25.39%20PM.wav?v=1606634994964";
+  const fn2 = await startStream(
+    packetCollector2,
+    link2,
+    mockDataConnectionSend2,
+    0,
+    true,
+    false,
+    source
   );
-  const userInputStream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: false,
-      noiseSuppression: false,
-      channelCount: 1
-    }
-  });
-  const userInputNode = new MediaStreamAudioSourceNode(audioContext, {
-    mediaStream: userInputStream
-  });
-
-  const scriptProcessors = createMultipleScriptProcessors(clientAmount);
-  scriptProcessors[0].port.onmessage = event => {
-    sendPCMToServer(event.data);
-  };
-  scriptProcessors[1].port.onmessage = event => {
-    sendPCMToServer2(event.data);
-  };
-
-  scriptProcessors[0].connect(audioContext.destination);
-  scriptProcessors[1].connect(audioContext.destination);
-  let refreshIntervalId1, refreshIntervalId2;
-  let playNode, playNode2;
-  function onServerStartCallBack() {
-    playNode = new AudioBufferSourceNode(audioContext, {
-      buffer: songBuffer
-    });
-    playNode2 = new AudioBufferSourceNode(audioContext, {
-      buffer: songBuffer2
-    });
-    playNode.connect(scriptProcessors[0]);
-    // userInputNode.connect(scriptProcessors[0]);
-    // playNode.connect(audioContext.destination)
-    playNode2.connect(scriptProcessors[1]);
-    // playNode.loop = true;
-    playNode.start();
-    playNode2.start();
-    // playNode.onended = () => {
-    //   scriptProcessors.map((scriptProcessor) => {
-    //     scriptProcessor.port.postMessage({ stop: true });
-    //   });
-    // };
-    scriptProcessors.map(scriptProcessor => {
-      scriptProcessor.port.postMessage({ start: true });
-    });
-    // work around it output nothing
-    refreshIntervalId1 = setInterval(function() {
-      const length = packetCollector.length;
-      if (length) {
-        const data = {
-          type: "clientPCMPacket",
-          PCMPacket: packetCollector.splice(0, length)
-        };
-        mockDataConnectionSend(data);
-      }
-    }, 1000);
-    refreshIntervalId2 = setInterval(function() {
-      const length = packetCollector2.length;
-      if (length) {
-        const data = {
-          type: "clientPCMPacket",
-          PCMPacket: packetCollector2.splice(0, length)
-        };
-        mockDataConnectionSend(data);
-      }
-    }, 1000);
-  }
-
-  function onServerStopCallBack() {
-    scriptProcessors.map(scriptProcessor => {
-      scriptProcessor.port.postMessage({ stop: true });
-    });
-    playNode.stop();
-    playNode.disconnect();
-    playNode2.stop();
-    playNode2.disconnect();
-    clearInterval(refreshIntervalId1);
-    clearInterval(refreshIntervalId2);
-    packetCollector.length = 0;
-    packetCollector2.length = 0;
-  }
-
-  scriptProcessorEnd = startServer(onServerStartCallBack, onServerStopCallBack);
+  const onServerStartCallBack2 = fn2.onServerStartCallBack;
+  const onServerStopCallBack2 = fn2.onServerStopCallBack;
+  const changeAudioTrack2 = fn2.changeAudioTrack;
+  startServer(
+    onServerStartCallBack,
+    onServerStopCallBack,
+    onServerStartCallBack2,
+    onServerStopCallBack2,
+    changeAudioTrack,
+    changeAudioTrack2
+  );
 }
-let scriptProcessorEnd;
+
 let packetCollector = [];
-function sendPCMToServer(PCMPacket) {
-  packetCollector.push(PCMPacket);
-}
-
 let packetCollector2 = [];
-function sendPCMToServer2(PCMPacket) {
-  packetCollector2.push(PCMPacket);
-}
-//
-let PCMbuffer = [];
-let scriptNodeIndex;
-
-const status = { serverStarted: null };
 
 function stopStream() {
   document.getElementById("stopButton").disabled = true;
   console.log("Leaving the session");
 }
-
-async function loadAudioBuffer(url) {
-  console.log("Loading audio data from %s.", url);
-  const response = await fetch(url);
-  const audioData = await response.arrayBuffer();
-  const buffer = await audioContext.decodeAudioData(audioData);
-  return buffer;
+function mockDataConnectionSend1(dataConnection, data) {
+  passPCMPacketToServerProcessor(data, scriptProcessorEnd, "1");
+}
+function mockDataConnectionSend2(dataConnection, data) {
+  passPCMPacketToServerProcessor(data, scriptProcessorEnd, "2");
 }
 
-function mockDataConnectionSend(data) {
-  //console.log("mocksend", data);
-  data.PCMPacket.forEach(PCMPacket => {
-    // const buffer = PCMPacket.pcm;
-    // const pcm = new Float32Array(buffer);
-    const pcm = PCMPacket.pcm;
-    gotRemotePCMPacket({ ...PCMPacket, pcm });
-  });
+function updateUITime(time) {
+  document.getElementById("time").innerHTML = time;
 }
 
-function startServer(onServerStartCallBack, onServerStopCallBack) {
-  var loopLength, loopBeats, metronomeGain;
+let scriptProcessorEnd;
+// let audioBlob
+async function startServer(
+  onServerStartCallBack,
+  onServerStopCallBack,
+  onServerStartCallBack2,
+  onServerStopCallBack2,
+  changeAudioTrack,
+  changeAudioTrack2
+) {
+  async function publishBlob(blob) {
+    const arrayBuffer = await blob.arrayBuffer();
 
-  // Update UI
-  document.getElementById("sampleRate").disabled = true;
-  // Get user input
-  sampleRate = document.getElementById("sampleRate").value;
-  console.log("Creating Web Audio.");
-  // audioContext = new AudioContext({ sampleRate });
+    const serverSendTrack = async (event) => {
+      const arrayBuffer2 = arrayBuffer.slice();
+      changeAudioTrack(arrayBuffer);
+      changeAudioTrack2(arrayBuffer2);
+    };
 
-  const scriptProcessorEnd = createServerProcessorNode(
-    audioContext,
-    clientAmount
+    document.getElementById("sendTrack").onclick = serverSendTrack;
+    document.querySelector("audio").src = URL.createObjectURL(blob);
+  }
+  const link =
+"https://cdn.glitch.com/5174b6ca-0ae8-4220-8ac7-0e6f337f0c92%2FWhatsApp%20Audio%202020-11-29%20at%203.25.39%20PM.wav?v=1606634994964"
+  const serverNode = await startServerNode(
+    defaultSampleRate,
+    clientAmount,
+    updateUITime,
+    publishBlob,
+    link
   );
+  scriptProcessorEnd = serverNode.scriptProcessorEnd;
+  const onStop = serverNode.onStop;
+  const onStart = serverNode.onStart;
+  const mockdataConnection = null;
 
-  scriptProcessorEnd.connect(audioContext.destination);
+  addParticipant("1", scriptProcessorEnd);
+  addParticipant("2", scriptProcessorEnd);
 
-  const serverSendStartMock = event => {
-    // status.serverStarted = true;
-    scriptProcessorEnd.port.postMessage({ start: true });
-    onServerStartCallBack();
+  const serverSendStartMock = (event) => {
+    const startTime = document.getElementById("startSecond").value;
+    onStart(startTime);
+    onServerStartCallBack(mockdataConnection, parseFloat(startTime));
+    onServerStartCallBack2(mockdataConnection, parseFloat(startTime));
   };
 
-  const serverSendStopMock = event => {
-    // status.serverStarted = true;
-    scriptProcessorEnd.port.postMessage({ stop: true });
-    onServerStopCallBack();
+  const serverSendStopMock = (event) => {
+    onStop();
+    onServerStopCallBack(mockdataConnection);
+    onServerStopCallBack2(mockdataConnection);
   };
 
   document.getElementById("play").onclick = serverSendStartMock;
-
   document.getElementById("stop").onclick = serverSendStopMock;
-  return scriptProcessorEnd;
+
+  function onChangeGainFor1(event) {
+    const gain = event.target.value / 100;
+    showVal1(gain);
+    changeGain("1", scriptProcessorEnd, gain);
+  }
+  function onChangeGainFor2(event) {
+    const gain = event.target.value / 100;
+    showVal2(gain);
+    changeGain("2", scriptProcessorEnd, gain);
+  }
+
+  document.getElementById("vol1").onchange = onChangeGainFor1;
+  document.getElementById("vol2").onchange = onChangeGainFor2;
 }
 
-function gotRemotePCMPacket(PCMPacket) {
-  // console.log(PCMPacket);
+function showVal1(val) {
+  document.getElementById("vol1Box").innerHTML = val;
+}
 
-  scriptProcessorEnd.port.postMessage(PCMPacket);
+function showVal2(val) {
+  document.getElementById("vol2Box").innerHTML = val;
 }

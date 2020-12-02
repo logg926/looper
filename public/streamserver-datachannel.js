@@ -1,130 +1,204 @@
 "use strict";
 
-import { skynetApiKey, PCMbufferSize , dataChannelOptions} from "./constants.js";
+import {
+  skynetApiKey,
+  defaultSampleRate,
+  serverStreamConstrain
+} from "./constants.js";
 import "https://webrtc.github.io/adapter/adapter-latest.js";
+import { initMediaDevice } from "./helperFunctions.js";
 
-import { createServerProcessorNode } from "./sync-new.js";
+import {
+  passPCMPacketToServerProcessor,
+  startServerNode,
+  addParticipant
+} from "./audioContext-server.js";
 
-var audioContext, sampleRate;
-
-// let scriptEndNodeStartingTime;
-let PCMbuffer = [];
-let scriptNodeIndex;
 const status = { serverStarted: null };
 document.addEventListener("DOMContentLoaded", initDocument);
 
+const remoteVideos = document.getElementById("js-remote-streams");
+const localVideo = document.getElementById("js-local-stream");
+function updateUITime(time) {
+  document.getElementById("time").innerHTML = time;
+}
 async function initDocument() {
   // Adding event handlers to DOM.
+
   document.getElementById("startServerButton").onclick = startServer;
+  var selectBar = document.getElementById("audioSource");
+  initMediaDevice(selectBar);
+}
+function muteStream(localStream) {
+  localStream.getAudioTracks().forEach(track => (track.enabled = false));
+}
+function unmuteStream(localStream) {
+  localStream.getAudioTracks().forEach(track => (track.enabled = true));
 }
 
+
 async function startServer() {
-  var loopLength, loopBeats, tempo, metronomeGain;
+  async function publishBlob(blob) {
+    const arrayBuffer = await blob.arrayBuffer();
 
-  // Update UI
-  document.getElementById("sampleRate").disabled = true;
-  // Get user input
-  sampleRate = document.getElementById("sampleRate").value;
-  console.log("Creating Web Audio.");
-  audioContext = new AudioContext({ sampleRate });
+    const serverSendTrack = async event => {
+      //send arrayBuffer
+      const data = {
+        type: "serverCommand",
+        msg: "changeAudio",
+        arrayBuffer: arrayBuffer.slice()
+      };
 
-  await audioContext.audioWorklet.addModule("server-processor.js");
-  const scriptProcessorEnd = createServerProcessorNode(
-    audioContext,
-    clientAmount
+      dataConnections.map(dataConnection => {
+        dataConnection.send(data);
+      });
+    };
+
+    document.getElementById("sendTrack").onclick = serverSendTrack;
+    document.querySelector("audio").src = URL.createObjectURL(blob);
+  }
+
+  const link = document.getElementById("link").value;
+
+  const { scriptProcessorEnd, onStart, onStop } = await startServerNode(
+    defaultSampleRate,
+    clientAmount,
+    updateUITime,
+    publishBlob,
+    link
   );
-  scriptProcessorEnd.connect(audioContext.destination);
-  await sendAndRecievefromClientSkyway(gotRemotePCMPacket, scriptProcessorEnd);
+
+  const localStream = await sendAndRecievefromClientSkyway(scriptProcessorEnd);
 
   function onclickstart() {
-    scriptProcessorEnd.port.postMessage({ start: true });
+    const startTime = document.getElementById("startSecond").value;
+    muteStream(localStream);
+    onStart(startTime);
     const data = {
       type: "serverCommand",
       msg: "start",
+      startTime: parseFloat(startTime)
     };
 
-    dataConnections.map((dataConnection) => {
+    console.log("clickstart", dataConnections);
+    dataConnections.map(dataConnection => {
       dataConnection.send(data);
     });
   }
 
   function onclickstop() {
-    scriptProcessorEnd.port.postMessage({ stop: true });
+    unmuteStream(localStream);
+    onStop();
     const data = {
       type: "serverCommand",
-      msg: "stop",
+      msg: "stop"
     };
-
-    dataConnections.map((dataConnection) => {
+    dataConnections.map(dataConnection => {
       dataConnection.send(data);
     });
   }
+
   document.getElementById("play").onclick = onclickstart;
 
   document.getElementById("stop").onclick = onclickstop;
 }
 
-const dataConnections = [];
-async function sendAndRecievefromClientSkyway(
-  gotRemotePCMPacket,
-  scriptProcessorEnd
-) {
-  const peer = new Peer({
-    key: skynetApiKey,
-    debug: 3,
-  });
-  console.log("sky net: new peer");
-  peer.on("open", () => {
-    console.log("sky net: open ");
-    document.getElementById("my-id").textContent = peer.id;
-  });
-  document.getElementById("make-call").onclick = () => {
-    const theirID = document.getElementById("their-id").value;
-    const dataConnection = peer.connect(theirID, dataChannelOptions);
-    // Send data
-    dataConnection.on("open", () => {
-      dataConnections.push(dataConnection);
-    });
-    // Receive data
-    dataConnection.on("data", (data) => {
-      console.log("receive", data);
-      if (data.type == "clientPCMPacket") {
-        data.PCMPacket.forEach((PCMPacket) => {
-          const buffer = PCMPacket.pcm;
-          const pcm = new Float32Array(buffer);
+let dataConnections = [];
+const peer = new Peer({
+  key: skynetApiKey,
+  debug: 3
+});
+peer.on("open", () => {
+  console.log("sky net: open ");
+  document.getElementById("my-id").textContent = peer.id;
+});
 
-          gotRemotePCMPacket({ ...PCMPacket, pcm }, scriptProcessorEnd);
-        });
-      }
-    });
-  };
-  document.getElementById("make-call2").onclick = () => {
-    const theirID = document.getElementById("their-id2").value;
+async function sendAndRecievefromClientSkyway(scriptProcessorEnd) {
+  function call(theirID) {
+    //connect client
     const dataConnection = peer.connect(theirID);
-    // Send data
     dataConnection.on("open", () => {
       dataConnections.push(dataConnection);
+      console.log(
+        "after call, dataConnections",
+        dataConnections.map(x => x.remoteId)
+      );
+      addParticipant(theirID, scriptProcessorEnd);
     });
     // Receive data
-    dataConnection.on("data", (data) => {
-      console.log("receive", data);
-      if (data.type == "clientPCMPacket") {
-        data.PCMPacket.forEach((PCMPacket) => {
-          const buffer = PCMPacket.pcm;
-          const pcm = new Float32Array(buffer);
-
-          gotRemotePCMPacket({ ...PCMPacket, pcm }, scriptProcessorEnd);
-        });
+    dataConnection.on("data", data => {
+      if (data.type === "clientPCMPacket") {
+        passPCMPacketToServerProcessor(data, scriptProcessorEnd, theirID);
       }
     });
+  }
+
+  var myPreferredCameraDeviceId = document.getElementById("audioSource").value;
+  const deviceAudioChoose = {
+    ...serverStreamConstrain,
+    audio: {
+      ...serverStreamConstrain.audio,
+      deviceId: myPreferredCameraDeviceId
+    }
   };
-  peer.on("error", (err) => {
+  const localStream = await navigator.mediaDevices
+    .getUserMedia(deviceAudioChoose)
+    .catch(console.error);
+
+  // Render local stream
+  localVideo.muted = true;
+  localVideo.srcObject = localStream;
+  localVideo.playsInline = true;
+  await localVideo.play().catch(console.error);
+
+  const sfuRoom = peer.joinRoom("testroom1", {
+    mode: "sfu",
+    stream: localStream
+  });
+  // sfuRoom.on("open", () => {});
+
+  sfuRoom.on("stream", async stream => {
+    const newVideo = document.createElement("video");
+    newVideo.srcObject = stream;
+    newVideo.playsInline = true;
+    // mark peerId to find it later at peerLeave event
+    newVideo.setAttribute("data-peer-id", stream.peerId);
+    call(stream.peerId);
+    remoteVideos.append(newVideo);
+    await newVideo.play().catch(console.error);
+  });
+  //for closing room members
+  sfuRoom.on("peerLeave", peerId => {
+    const remoteVideo = remoteVideos.querySelector(
+      `[data-peer-id="${peerId}"]`
+    );
+    remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+    remoteVideo.srcObject = null;
+    remoteVideo.remove();
+    dataConnections = dataConnections.filter(
+      dataConnection => dataConnection.remoteId !== peerId
+    );
+    console.log(
+      "after peer leave with ",
+      peerId,
+      " dataConnections",
+      dataConnections.map(x => x.remoteId)
+    );
+  });
+  // for closing myself
+  sfuRoom.once("close", () => {
+    Array.from(remoteVideos.children).forEach(remoteVideo => {
+      remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+      remoteVideo.srcObject = null;
+      remoteVideo.remove();
+    });
+  });
+
+  peer.on("error", err => {
     alert(err.message);
   });
+
+  return localStream;
 }
 
 const clientAmount = 2;
-function gotRemotePCMPacket(PCMPacket, scriptProcessorEnd) {
-  //console.log("PCMPacket", PCMPacket);
-  scriptProcessorEnd.port.postMessage(PCMPacket);
-}

@@ -14,7 +14,8 @@ class ServerProcessor extends AudioWorkletProcessor {
     this.status = {};
     this.PCMbuffer = new Map();
     this.bufferLock = new Map();
-    this.port.onmessage = event => {
+    this.volumeControl = new Map();
+    this.port.onmessage = (event) => {
       //console.log('receive',event.data);
       // Handling data from the node.
       if (event.data.start) {
@@ -23,6 +24,13 @@ class ServerProcessor extends AudioWorkletProcessor {
         this.status.serverStarted = false;
         this.scriptNodeIndex = undefined;
         // when restart it will start from 0
+        this.PCMbuffer = new Map();
+        //clean PCMbuffer
+      } else if (event.data.command == "addParticipant") {
+        this.volumeControl.set(event.data.participantId, 1);
+      } else if (event.data.command == "changeGain") {
+        this.volumeControl.set(event.data.participantId, event.data.gain);
+        // console.log(event.data);
       } else {
         const PCMPacket = event.data;
         this.pushPCMbuffer(PCMPacket, this.PCMbuffer, this.clientAmount);
@@ -31,9 +39,17 @@ class ServerProcessor extends AudioWorkletProcessor {
   }
 
   pushPCMbuffer(PCMPacket, PCMbuffer, clientAmount) {
-    const avgPCM = PCMPacket.pcm.map(val => {
-      return val / clientAmount;
+    const gain = this.volumeControl.get(PCMPacket.clientID);
+    const avgPCM = PCMPacket.pcm.map((val) => {
+      //TODO cuz want to change gain in play time instead of push buffer
+      return Math.max(Math.min(val * gain, 1), -1) / clientAmount;
     });
+
+    // console.log(gain, PCMPacket.clientID);
+    // PCMbuffer.set(PCMPacket.packageIndex, {
+    //   ...PCMPacket,
+    //   pcm: avgPCM,
+    // });
 
     if (!this.bufferLock.has(PCMPacket.packageIndex)) {
       this.bufferLock.set(PCMPacket.packageIndex, new Mutex());
@@ -42,11 +58,14 @@ class ServerProcessor extends AudioWorkletProcessor {
     this.bufferLock
       .get(PCMPacket.packageIndex)
       .acquire()
-      .then(async release => {
+      .then(async (release) => {
         try {
           const existPCMPacket = PCMbuffer.get(PCMPacket.packageIndex);
           if (!existPCMPacket) {
-            PCMbuffer.set(PCMPacket.packageIndex, { ...PCMPacket, pcm: avgPCM });
+            PCMbuffer.set(PCMPacket.packageIndex, {
+              ...PCMPacket,
+              pcm: avgPCM,
+            });
           } else {
             PCMbuffer.get(PCMPacket.packageIndex).pcm = PCMbuffer.get(
               PCMPacket.packageIndex
@@ -59,34 +78,16 @@ class ServerProcessor extends AudioWorkletProcessor {
           release();
         }
       });
-
-    /*
-    if (!PCMbuffer[PCMPacket.packageIndex]) {
-      console.log("new index", PCMPacket.packageIndex);
-      PCMbuffer[PCMPacket.packageIndex] = [
-        ...PCMbuffer[PCMPacket.packageIndex],
-        { ...PCMPacket, pcm: avgPCM }
-      ];
-    } else {
-      console.log("existing index", PCMPacket.packageIndex);
-      //summing averaged buffer
-      PCMbuffer[PCMPacket.packageIndex].pcm = PCMbuffer[
-        PCMPacket.packageIndex
-      ].pcm.map((num, idx) => {
-        return num + avgPCM[idx];
-      });
-      //sum counter
-      PCMbuffer[PCMPacket.packageIndex].counter += PCMPacket.counter;
-    }
-    */
-
     return PCMbuffer;
   }
   process(inputs, outputs, parameters) {
     const outputData = outputs[0][0];
     const delayBufferAmount = this.masterDelayBufferAmount;
     const playingIndex = this.scriptNodeIndex - delayBufferAmount;
-
+    if (playingIndex == 0) {
+      this.port.postMessage({ indexIsZero: true });
+    }
+    this.port.postMessage({ playingIndex });
     if (!this.scriptNodeIndex) {
       if (this.status.serverStarted) {
         // init scriptNode
@@ -95,6 +96,7 @@ class ServerProcessor extends AudioWorkletProcessor {
         return true;
       }
     }
+
     if (playingIndex >= 0) {
       const bufferToPlay = this.PCMbuffer.get(playingIndex);
       // console.log(bufferToPlay);
@@ -103,7 +105,8 @@ class ServerProcessor extends AudioWorkletProcessor {
           // make output equal to the same as the input
           outputData[sample] = bufferToPlay.pcm[sample];
         }
-        console.log(playingIndex, bufferToPlay);
+        // console.log(playingIndex,'output', outputData);
+        // console.log("serverPlayingIndex", playingIndex);
       } else {
         for (var sample = 0; sample < outputData.length; sample++) {
           // make output equal to the same as the input
@@ -112,9 +115,9 @@ class ServerProcessor extends AudioWorkletProcessor {
       }
 
       this.PCMbuffer.delete(playingIndex);
-      console.log("PCMbuffer length", this.PCMbuffer.size);
+      // console.log("PCMbuffer length", this.PCMbuffer.size);
     }
-    //  if (this.status.serverStarted === true) console.log('output',outputData);
+    //if (this.status.serverStarted === true) console.log('output sound',outputData);
 
     this.scriptNodeIndex += 1;
     return true;

@@ -1,45 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Looper - Client</title>
-    <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script type="module" src="single-datachannel.js"></script>
-  </head>
 
-  <body>
-    <h1>Looper - Client</h1>
-    <p>Session ID: <input id="sessionId" /></p>
-    <p>Latency: <input id="latency" /> ms</p>
-    <p>
-      Sample rate:
-      <select id="sampleRate">
-        <option value="44100" selected>44100 Hz</option>
-        <option value="48000">48000 Hz</option>
-      </select>
-    </p>
-    <p>
-      Loop lenght:
-      <input type="number" id="loopBeats" value="4" />
-      beats.
-    </p>
-    <p>
-      <button id="startButton">Join</button>
-      <button id="stopButton" disabled>Leave</button>
-      <a id="downloadButton">Download</a>
-    </p>
-    <div id="videos">
-      <!-- <div id="subscriber"></div> -->
-      <div id="publisher"></div>
+<head>
+  <meta charset="utf-8" />
+  <title>Looper - Client</title>
+  <script src="https://cdn.webrtc.ecl.ntt.com/skyway-latest.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script type="module" src="single-datachannel.js"></script>
+</head>
 
-      <div id="subscriber" #subscriber></div>
-    </div>
-    <div>
-      skynet Call ID:
-      <p id="my-id"></p>
-    </div>
-    <button id="play">play</button>
-    <button id="stop">stop</button>
-  </body>
+<body>
+  <h1>Looper - Client</h1>
+  <p>Latency: <input id="latency" value="0" /> ms</p>
+  <p>Playing Time:
+  <p id="time"></p>
+  </p>
+  <p>
+    <select id="audioSource"></select>
+  </p>
+
+  <button id="sendTrack">
+    Send Track
+  </button>
+
+  <audio controls></audio>
+  <p>
+    startSecond (in s):
+    <input type="number" id="startSecond" value="0" />
+  </p>
+
+  <button id="startButton">Join</button>
+  <button id="stopButton" disabled>Leave</button>
+
+  <div>
+    skynet Call ID:
+    <p id="my-id"></p>
+  </div>
+  <button id="play">play</button>
+  <button id="stop">stop</button>
+
+  <label for="vol">Client 1:</label>
+  <input type="range" id="vol1" min="0" max="200">
+<div id="vol1Box"></div>
+  <label for="vol">Client 2:</label>
+  <input type="range" id="vol2" min="0" max="200">
+
+<div id="vol2Box"></div>
+</body>
+
 </html>
